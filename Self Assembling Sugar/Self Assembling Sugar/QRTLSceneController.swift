@@ -111,9 +111,10 @@ final class QRTLSceneController:
 
     private let animationSpeed: Double = 1.0
 
-    // ============================================================
-    // MARK: - INITIALIZATION
-    // ============================================================
+ 
+    private var sourceStartPositions: [SCNVector3] = []
+    private var sourceTargetPositions: [SCNVector3] = []
+
 
     override init() {
         super.init()
@@ -130,140 +131,241 @@ final class QRTLSceneController:
 
     func setupScene(sceneView: SCNView) {
 
+        // ============================================================
+        // MARK: - RETAIN SCNVIEW
+        // ============================================================
+
         self.sceneView = sceneView
 
-        scene = SCNScene()
+        // ============================================================
+        // MARK: - CREATE SCENE
+        // ============================================================
 
-        scene.background.contents = UIColor(
-            red: 0.015,
-            green: 0.020,
-            blue: 0.040,
-            alpha: 1.0
-        )
+        let newScene = SCNScene()
 
-        sceneView.scene = scene
+        newScene.background.contents = UIColor.black
+
+        self.scene = newScene
+
+        // ============================================================
+        // MARK: - CONFIGURE SCNVIEW
+        // ============================================================
+
+        sceneView.scene = newScene
+
+        // CRITICAL:
+        // This controller receives SceneKit's render callbacks.
         sceneView.delegate = self
+
+        // CRITICAL:
+        // Force SceneKit to continuously render.
+        sceneView.isPlaying = true
+        sceneView.rendersContinuously = true
+
+        sceneView.backgroundColor = UIColor.black
+
         sceneView.allowsCameraControl = true
         sceneView.autoenablesDefaultLighting = false
-        sceneView.isPlaying = true
-        sceneView.backgroundColor = .black
 
-        // --------------------------------------------------------
-        // WORLD
-        // --------------------------------------------------------
-
-        scene.rootNode.addChildNode(worldNode)
-
-        worldNode.addChildNode(latticeNode)
-        worldNode.addChildNode(shellNode)
-        worldNode.addChildNode(forceNode)
-        worldNode.addChildNode(currentNode)
-
-        worldNode.addChildNode(nucleusNode)
-        worldNode.addChildNode(electronNode)
-
-        worldNode.addChildNode(moleculeNode)
-
-        moleculeNode.addChildNode(sourceNode)
-        moleculeNode.addChildNode(waterNode)
-        moleculeNode.addChildNode(carbonNode)
-        moleculeNode.addChildNode(hydrogenNode)
-        moleculeNode.addChildNode(oxygenNode)
-        moleculeNode.addChildNode(bondNode)
-        moleculeNode.addChildNode(ringNode)
-        moleculeNode.addChildNode(stabilizationNode)
-
-        // --------------------------------------------------------
-        // FLOOR
-        // --------------------------------------------------------
-
-        let floor = SCNFloor()
-        floor.reflectivity = 0.05
-
-        let floorNode = SCNNode(geometry: floor)
-        floorNode.position.y = -2.6
-
-        let floorMaterial = SCNMaterial()
-        floorMaterial.diffuse.contents = UIColor(
-            white: 0.025,
-            alpha: 1.0
-        )
-
-        floor.materials = [floorMaterial]
-
-        worldNode.addChildNode(floorNode)
-
-        // --------------------------------------------------------
-        // CAMERA
-        // --------------------------------------------------------
-
-        let camera = SCNCamera()
-        camera.fieldOfView = 48
-        camera.zNear = 0.01
-        camera.zFar = 200.0
+        // ============================================================
+        // MARK: - CAMERA
+        // ============================================================
 
         let cameraNode = SCNNode()
+
+        let camera = SCNCamera()
+
+        camera.fieldOfView = 48
+        camera.zNear = 0.01
+        camera.zFar = 200
+
         cameraNode.camera = camera
-        cameraNode.position = SCNVector3(0, 3, 11)
-        cameraNode.look(at: SCNVector3(0, 0, 0))
 
-        worldNode.addChildNode(cameraNode)
+        cameraNode.position = SCNVector3(
+            0,
+            3,
+            11
+        )
 
-        // --------------------------------------------------------
-        // KEY LIGHT
-        // --------------------------------------------------------
+        newScene.rootNode.addChildNode(cameraNode)
+
+        // Point camera toward the QRTL center.
+        let lookAt = SCNLookAtConstraint(
+            target: worldNode
+        )
+
+        lookAt.isGimbalLockEnabled = true
+
+        cameraNode.constraints = [
+            lookAt
+        ]
+
+        // ============================================================
+        // MARK: - KEY LIGHT
+        // ============================================================
+
+        let keyLightNode = SCNNode()
 
         let keyLight = SCNLight()
+
         keyLight.type = .omni
         keyLight.intensity = 1100
 
-        let keyNode = SCNNode()
-        keyNode.light = keyLight
-        keyNode.position = SCNVector3(4, 6, 6)
+        keyLightNode.light = keyLight
 
-        worldNode.addChildNode(keyNode)
+        keyLightNode.position = SCNVector3(
+            4,
+            6,
+            6
+        )
 
-        // --------------------------------------------------------
-        // FILL LIGHT
-        // --------------------------------------------------------
+        newScene.rootNode.addChildNode(
+            keyLightNode
+        )
+
+        // ============================================================
+        // MARK: - FILL LIGHT
+        // ============================================================
+
+        let fillLightNode = SCNNode()
 
         let fillLight = SCNLight()
+
         fillLight.type = .omni
         fillLight.intensity = 600
 
-        let fillNode = SCNNode()
-        fillNode.light = fillLight
-        fillNode.position = SCNVector3(-5, 2, 4)
+        fillLightNode.light = fillLight
 
-        worldNode.addChildNode(fillNode)
+        fillLightNode.position = SCNVector3(
+            -5,
+            2,
+            4
+        )
 
-        // --------------------------------------------------------
-        // BUILD STATIC VISUALIZATION COMPONENTS
-        //
-        // NOTE:
-        // There is intentionally NO buildGlucoseMolecule() here.
-        //
-        // The molecular structure is constructed progressively by
-        // updateMolecularAssembly().
-        // --------------------------------------------------------
+        newScene.rootNode.addChildNode(
+            fillLightNode
+        )
+
+        // ============================================================
+        // MARK: - WORLD HIERARCHY
+        // ============================================================
+
+        newScene.rootNode.addChildNode(
+            worldNode
+        )
+
+        worldNode.addChildNode(
+            latticeNode
+        )
+
+        worldNode.addChildNode(
+            shellNode
+        )
+
+        worldNode.addChildNode(
+            forceNode
+        )
+
+        worldNode.addChildNode(
+            currentNode
+        )
+
+        worldNode.addChildNode(
+            nucleusNode
+        )
+
+        worldNode.addChildNode(
+            moleculeNode
+        )
+
+        // ============================================================
+        // MARK: - MOLECULAR HIERARCHY
+        // ============================================================
+
+        moleculeNode.addChildNode(
+            sourceNode
+        )
+
+        moleculeNode.addChildNode(
+            waterNode
+        )
+
+        moleculeNode.addChildNode(
+            carbonNode
+        )
+
+        moleculeNode.addChildNode(
+            hydrogenNode
+        )
+
+        moleculeNode.addChildNode(
+            oxygenNode
+        )
+
+        moleculeNode.addChildNode(
+            bondNode
+        )
+
+        moleculeNode.addChildNode(
+            ringNode
+        )
+
+        moleculeNode.addChildNode(
+            stabilizationNode
+        )
+
+        // ============================================================
+        // MARK: - BUILD QRTL ENVIRONMENT
+        // ============================================================
 
         buildLattice()
+
         buildEnergyShell()
+
         buildNucleus()
-        buildElectrons()
+
         buildForceVisualization()
+
         buildCurrentVisualization()
 
+        // ============================================================
+        // MARK: - BUILD SOURCE / MOLECULAR MATERIAL
+        // ============================================================
+
         buildSourceMaterial()
+
         buildWaterMolecules()
 
-        // Start with all molecular components hidden.
+        buildProgressiveGlucose()
+
+        // ============================================================
+        // MARK: - INITIAL MOLECULAR STATE
+        // ============================================================
+
         resetMolecularAssembly()
 
-        updateForces()
-        updateSceneForCurrentPhase()
-    }
+        // ============================================================
+        // MARK: - INITIAL PHYSICS
+        // ============================================================
 
+        updateForces()
+
+        // ============================================================
+        // MARK: - INITIAL VISUAL STATE
+        // ============================================================
+
+        updateSceneForCurrentPhase()
+
+        // ============================================================
+        // MARK: - START RENDER LOOP
+        // ============================================================
+
+        elapsedTime = 0
+        lastTime = 0
+
+        sceneView.isPlaying = true
+        sceneView.rendersContinuously = true
+    }
     // ============================================================
     // MARK: - 17-STAGE PHASE MODEL
     // ============================================================
@@ -813,11 +915,11 @@ final class QRTLSceneController:
 
     private func updateMolecularAssembly() {
 
-        let stage = phaseProgress
+        let stage = phase.rawValue
 
-        // ========================================================
+        // ============================================================
         // 1–3. SOURCE MATERIAL
-        // ========================================================
+        // ============================================================
 
         sourceNode.opacity =
             stage >= QRTLPhase.sourceCollection.rawValue
@@ -829,27 +931,28 @@ final class QRTLSceneController:
             ? 1.0
             : 0.0
 
-        // ========================================================
+        // ============================================================
         // 4–8. EXCITATION / QRTL FIELD
-        // ========================================================
+        // ============================================================
 
-        // Nothing molecular is assembled yet.
-        // The energy field is preparing the environment.
+        // No molecular assembly yet.
 
-        // ========================================================
+        // ============================================================
         // 9. ATOMIC CAPTURE
-        // ========================================================
+        // ============================================================
 
         moleculeNode.opacity =
             stage >= QRTLPhase.atomicCapture.rawValue
             ? 1.0
             : 0.0
 
-        // ========================================================
+        // ============================================================
         // 10. CARBON POSITIONING
-        // ========================================================
+        // ============================================================
 
         if stage >= QRTLPhase.carbonPositioning.rawValue {
+
+            carbonNode.opacity = 1.0
 
             let carbonProgress =
                 min(
@@ -862,8 +965,6 @@ final class QRTLSceneController:
                         ) + 1.0
                     ) / 2.0
                 )
-
-            carbonNode.opacity = 1.0
 
             for (index, atom) in carbonAtoms.enumerated() {
 
@@ -880,11 +981,15 @@ final class QRTLSceneController:
         } else {
 
             carbonNode.opacity = 0.0
+
+            carbonAtoms.forEach {
+                $0.opacity = 0.0
+            }
         }
 
-        // ========================================================
+        // ============================================================
         // 11. HYDROGEN POSITIONING
-        // ========================================================
+        // ============================================================
 
         if stage >= QRTLPhase.hydrogenPositioning.rawValue {
 
@@ -917,11 +1022,15 @@ final class QRTLSceneController:
         } else {
 
             hydrogenNode.opacity = 0.0
+
+            hydrogenAtoms.forEach {
+                $0.opacity = 0.0
+            }
         }
 
-        // ========================================================
+        // ============================================================
         // 12. OXYGEN POSITIONING
-        // ========================================================
+        // ============================================================
 
         if stage >= QRTLPhase.oxygenPositioning.rawValue {
 
@@ -954,11 +1063,15 @@ final class QRTLSceneController:
         } else {
 
             oxygenNode.opacity = 0.0
+
+            oxygenAtoms.forEach {
+                $0.opacity = 0.0
+            }
         }
 
-        // ========================================================
+        // ============================================================
         // 13. BOND ALIGNMENT
-        // ========================================================
+        // ============================================================
 
         if stage >= QRTLPhase.bondAlignment.rawValue {
 
@@ -991,43 +1104,58 @@ final class QRTLSceneController:
         } else {
 
             bondNode.opacity = 0.0
+
+            molecularBonds.forEach {
+                $0.opacity = 0.0
+            }
         }
 
-        // ========================================================
+        // ============================================================
         // 14. RING CLOSURE
-        // ========================================================
+        // ============================================================
 
-        ringNode.opacity =
-            stage >= QRTLPhase.ringClosure.rawValue
-            ? 1.0
-            : 0.0
+        if stage >= QRTLPhase.ringClosure.rawValue {
 
-        // ========================================================
+            ringNode.opacity = 1.0
+
+        } else {
+
+            ringNode.opacity = 0.0
+            ringNode.scale = SCNVector3(
+                0.01,
+                0.01,
+                0.01
+            )
+        }
+
+        // ============================================================
         // 15. GLUCOSE ASSEMBLY
-        // ========================================================
+        // ============================================================
 
         glucoseCreated =
             stage >= QRTLPhase.glucoseAssembly.rawValue
 
-        // ========================================================
+        // ============================================================
         // 16. MOLECULAR STABILIZATION
-        // ========================================================
+        // ============================================================
 
         stabilizationNode.opacity =
             stage >= QRTLPhase.molecularStabilization.rawValue
             ? 1.0
             : 0.0
 
-        // ========================================================
+        // ============================================================
         // 17. FINAL SUGAR
-        // ========================================================
+        // ============================================================
 
         if stage >= QRTLPhase.finalSugar.rawValue {
 
             moleculeNode.opacity = 1.0
+
             carbonNode.opacity = 1.0
             hydrogenNode.opacity = 1.0
             oxygenNode.opacity = 1.0
+
             bondNode.opacity = 1.0
             ringNode.opacity = 1.0
             stabilizationNode.opacity = 1.0
@@ -1050,41 +1178,77 @@ final class QRTLSceneController:
         }
     }
 
-    // ============================================================
-    // MARK: - MOLECULAR SOURCE
-    // ============================================================
-
+ 
     private func buildSourceMaterial() {
 
         sourceNode.childNodes.forEach {
             $0.removeFromParentNode()
         }
 
-        let positions: [SCNVector3] = [
-            SCNVector3(-2.8, 1.0, 0.0),
-            SCNVector3(-3.2, 0.4, 0.2),
-            SCNVector3(-2.7, 0.0, -0.2),
-            SCNVector3(2.8, 1.0, 0.0),
-            SCNVector3(3.1, 0.3, 0.2),
-            SCNVector3(2.7, -0.3, -0.2)
+        sourceStartPositions.removeAll()
+        sourceTargetPositions.removeAll()
+
+        // ------------------------------------------------------------
+        // Six incoming QRTL source packets.
+        // These begin outside the collection region.
+        // ------------------------------------------------------------
+
+        let starts: [SCNVector3] = [
+            SCNVector3(-3.4,  1.8,  0.0),
+            SCNVector3( 3.4,  1.8,  0.0),
+            SCNVector3(-3.8,  0.0,  0.0),
+            SCNVector3( 3.8,  0.0,  0.0),
+            SCNVector3(-3.2, -1.6,  0.0),
+            SCNVector3( 3.2, -1.6,  0.0)
         ]
 
-        for position in positions {
+        // ------------------------------------------------------------
+        // Collection positions surrounding the QRTL source.
+        // ------------------------------------------------------------
 
-            let sphere = SCNSphere(radius: 0.10)
+        let targets: [SCNVector3] = [
+            SCNVector3(-0.65,  0.45,  0.0),
+            SCNVector3( 0.65,  0.45,  0.0),
+            SCNVector3(-0.85,  0.00,  0.0),
+            SCNVector3( 0.85,  0.00,  0.0),
+            SCNVector3(-0.55, -0.48,  0.0),
+            SCNVector3( 0.55, -0.48,  0.0)
+        ]
 
-            let material = SCNMaterial()
-            material.diffuse.contents = UIColor.white
-            material.emission.contents = UIColor.white
+        sourceStartPositions = starts
+        sourceTargetPositions = targets
 
-            sphere.materials = [material]
+        // ------------------------------------------------------------
+        // Create source packets.
+        // ------------------------------------------------------------
+
+        for index in starts.indices {
+
+            let sphere = SCNSphere(radius: 0.11)
+
+            sphere.firstMaterial?.diffuse.contents =
+                UIColor.white
+
+            sphere.firstMaterial?.emission.contents =
+                UIColor.white
+
+            sphere.firstMaterial?.emission.intensity = 1.8
+
+            sphere.firstMaterial?.specular.contents =
+                UIColor.white
 
             let node = SCNNode(geometry: sphere)
-            node.position = position
+
+            node.position = starts[index]
+
+            node.opacity = 0.0
 
             sourceNode.addChildNode(node)
         }
+
+        sourceNode.opacity = 1.0
     }
+    //
 
     // ============================================================
     // MARK: - WATER MOLECULES
@@ -1674,19 +1838,29 @@ final class QRTLSceneController:
         color: UIColor
     ) -> SCNNode {
 
-        let geometry = SCNSphere(radius: radius)
+        let geometry = SCNSphere(
+            radius: radius
+        )
 
         let material = SCNMaterial()
+
         material.diffuse.contents = color
         material.specular.contents = UIColor.white
+        material.specular.intensity = 0.8
+        material.shininess = 80.0
 
         if color == UIColor.red {
             material.emission.contents = UIColor.red
+            material.emission.intensity = 0.35
         }
 
-        geometry.materials = [material]
+        geometry.materials = [
+            material
+        ]
 
-        return SCNNode(geometry: geometry)
+        return SCNNode(
+            geometry: geometry
+        )
     }
 
     // ============================================================
@@ -1892,42 +2066,6 @@ final class QRTLSceneController:
             node.position = positions[index]
 
             nucleusNode.addChildNode(node)
-        }
-    }
-
-    // ============================================================
-    // MARK: - ELECTRONS
-    // ============================================================
-
-    private func buildElectrons() {
-
-        electronNode.childNodes.forEach {
-            $0.removeFromParentNode()
-        }
-
-        for index in 0..<8 {
-
-            let angle =
-                Float(index) *
-                Float.pi * 2.0 / 8.0
-
-            let sphere = SCNSphere(radius: 0.045)
-
-            let material = SCNMaterial()
-            material.diffuse.contents = UIColor.yellow
-            material.emission.contents = UIColor.yellow
-
-            sphere.materials = [material]
-
-            let node = SCNNode(geometry: sphere)
-
-            node.position = SCNVector3(
-                cos(angle) * 0.48,
-                sin(angle) * 0.48,
-                0
-            )
-
-            electronNode.addChildNode(node)
         }
     }
 
@@ -2174,7 +2312,6 @@ final class QRTLSceneController:
         buildLattice()
         buildEnergyShell()
         buildNucleus()
-        buildElectrons()
         buildForceVisualization()
         buildCurrentVisualization()
 
@@ -2192,7 +2329,129 @@ final class QRTLSceneController:
         updateForces()
         updateSceneForCurrentPhase()
     }
+    private func animateSourceCollection(time: TimeInterval) {
 
+        guard phase.rawValue >= QRTLPhase.sourceCollection.rawValue else {
+
+            sourceNode.childNodes.forEach {
+                $0.opacity = 0.0
+            }
+
+            return
+        }
+
+        // ------------------------------------------------------------
+        // Step 2 occupies one complete stage.
+        // ------------------------------------------------------------
+
+        let stageDuration: Double = 2.5
+
+        let progress = min(
+            max(elapsedTime / stageDuration, 0.0),
+            1.0
+        )
+
+        let eased = smoothStep(progress)
+
+        // ------------------------------------------------------------
+        // Step 2 starts with the source packets outside the QRTL
+        // collection region and pulls them inward.
+        // ------------------------------------------------------------
+
+        for index in sourceNode.childNodes.indices {
+
+            guard index < sourceStartPositions.count,
+                  index < sourceTargetPositions.count
+            else {
+                continue
+            }
+
+            let node = sourceNode.childNodes[index]
+
+            let start = sourceStartPositions[index]
+            let target = sourceTargetPositions[index]
+
+            // --------------------------------------------------------
+            // Slight stagger so all six packets do not move identically.
+            // --------------------------------------------------------
+
+            let stagger =
+                Double(index) * 0.055
+
+            let localProgress = smoothStep(
+                min(
+                    max(
+                        (progress - stagger) /
+                        max(1.0 - stagger, 0.001),
+                        0.0
+                    ),
+                    1.0
+                )
+            )
+
+            node.position = SCNVector3(
+
+                start.x +
+                    (target.x - start.x) *
+                    Float(localProgress),
+
+                start.y +
+                    (target.y - start.y) *
+                    Float(localProgress),
+
+                start.z +
+                    (target.z - start.z) *
+                    Float(localProgress)
+            )
+
+            // --------------------------------------------------------
+            // Fade in as collection begins.
+            // --------------------------------------------------------
+
+            node.opacity = CGFloat(
+                min(1.0, localProgress * 3.0)
+            )
+
+            // --------------------------------------------------------
+            // Pulse as the packet approaches the collection region.
+            // --------------------------------------------------------
+
+            let pulse =
+                1.0 +
+                0.18 *
+                sin(
+                    Float(time * 8.0) +
+                    Float(index)
+                )
+
+            node.scale = SCNVector3(
+                pulse,
+                pulse,
+                pulse
+            )
+        }
+
+        // ------------------------------------------------------------
+        // Collection field pulse.
+        // ------------------------------------------------------------
+
+        let collectionPulse =
+            1.0 +
+            0.05 *
+            sin(time * 5.0)
+
+        sourceNode.scale = SCNVector3(
+            Float(collectionPulse),
+            Float(collectionPulse),
+            Float(collectionPulse)
+        )
+    }
+    private func smoothStep(_ value: Double) -> Double {
+
+        let t = min(max(value, 0.0), 1.0)
+
+        return t * t * (3.0 - 2.0 * t)
+    }
     // ============================================================
     // MARK: - PLAY / PAUSE
     // ============================================================
@@ -2210,58 +2469,64 @@ final class QRTLSceneController:
     // MARK: - SCENE RENDERER
     // ============================================================
 
+    // ============================================================
+    // MARK: - SCENE RENDERER
+    // ============================================================
+
     func renderer(
         _ renderer: SCNSceneRenderer,
         updateAtTime time: TimeInterval
     ) {
 
         if lastTime == 0 {
+
             lastTime = time
+
+            return
         }
 
-        let deltaTime =
-            min(
-                time - lastTime,
-                0.1
-            )
+        let delta =
+            min(time - lastTime, 0.1)
 
         lastTime = time
 
-        elapsedTime += deltaTime
-
-        // --------------------------------------------------------
-        // Continuous molecular animation
-        // --------------------------------------------------------
-
-        animateMolecularState(
-            time: elapsedTime
-        )
-
-        // --------------------------------------------------------
-        // Continuous energy/current animation
-        // --------------------------------------------------------
-
-        animateEnergyState(
-            time: elapsedTime
-        )
-
-        // --------------------------------------------------------
-        // Advance through stages
-        // --------------------------------------------------------
+        // ------------------------------------------------------------
+        // Do not advance the sequence while paused.
+        // ------------------------------------------------------------
 
         guard isPlaying else {
             return
         }
 
-        let stageDuration =
-            2.5 /
-            max(animationSpeed, 0.01)
+        elapsedTime += delta
+
+        // ------------------------------------------------------------
+        // Step-specific animations.
+        // ------------------------------------------------------------
+
+        animateSourceCollection(
+            time: elapsedTime
+        )
+
+        animateMolecularState(
+            time: elapsedTime
+        )
+
+        animateEnergyState(
+            time: elapsedTime
+        )
+
+        // ------------------------------------------------------------
+        // Advance to next QRTL phase.
+        // ------------------------------------------------------------
+
+        let stageDuration: TimeInterval = 2.5
 
         if elapsedTime >= stageDuration {
 
             elapsedTime = 0
 
-            if phaseProgress <
+            if phase.rawValue <
                 QRTLPhase.allCases.count - 1 {
 
                 nextStep()
@@ -2272,164 +2537,516 @@ final class QRTLSceneController:
             }
         }
     }
-
     // ============================================================
     // MARK: - MOLECULAR ANIMATION
     // ============================================================
 
-    private func animateMolecularState(
-        time: TimeInterval
-    ) {
+    private func animateMolecularState(time: TimeInterval) {
 
-        let stage = phaseProgress
+        // ============================================================
+        // CURRENT STAGE
+        // ============================================================
 
-        // --------------------------------------------------------
-        // Water excitation
-        // --------------------------------------------------------
+        let stage = phase.rawValue
+
+        // The renderer resets elapsedTime at every stage.
+        // Therefore elapsedTime represents progress through
+        // the current stage.
+        let stageDuration: Double =
+            2.5 / max(animationSpeed, 0.01)
+
+        let progress = min(
+            max(elapsedTime / stageDuration, 0.0),
+            1.0
+        )
+
+        // Smoothstep easing.
+        func ease(_ value: Double) -> Double {
+            let x = min(max(value, 0.0), 1.0)
+            return x * x * (3.0 - 2.0 * x)
+        }
+
+        let eased = Float(ease(progress))
+
+        // ============================================================
+        // STAGE 4
+        // HYDROGEN / OXYGEN EXCITATION
+        // ============================================================
 
         if stage >= QRTLPhase.hydrogenOxygenExcitation.rawValue {
 
-            let amount =
-                Float(
-                    1.0 +
-                    sin(time * 6.0) * 0.10
-                )
-
-            waterNode.scale = SCNVector3(
-                amount,
-                amount,
-                amount
-            )
-        }
-
-        // --------------------------------------------------------
-        // Antisymmetric excitation
-        // --------------------------------------------------------
-
-        if stage >=
-            QRTLPhase.antisymmetricExcitation.rawValue {
-
-            for (index, node)
-                in waterNode.childNodes.enumerated() {
-
-                let direction: Float =
-                    index % 2 == 0
-                    ? 1.0
-                    : -1.0
-
-                node.position.x +=
-                    sin(Float(time * 8.0)) *
-                    0.012 *
-                    direction
-            }
-        }
-
-        // --------------------------------------------------------
-        // Carbon positioning
-        // --------------------------------------------------------
-
-        if stage >=
-            QRTLPhase.carbonPositioning.rawValue {
-
             let pulse =
                 1.0 +
-                Float(
-                    sin(time * 3.0) * 0.025
-                )
+                0.08 * Float(sin(time * 4.0))
 
-            carbonNode.scale = SCNVector3(
+            waterNode.scale = SCNVector3(
                 pulse,
                 pulse,
                 pulse
             )
+        } else {
+
+            waterNode.scale = SCNVector3(
+                1,
+                1,
+                1
+            )
         }
 
-        // --------------------------------------------------------
-        // Hydrogen positioning
-        // --------------------------------------------------------
+        // ============================================================
+        // STAGE 5
+        // ANTISYMMETRIC EXCITATION
+        //
+        // Animate the entire water source without changing the
+        // individual atom positions permanently.
+        // ============================================================
 
-        if stage >=
-            QRTLPhase.hydrogenPositioning.rawValue {
+        if stage >= QRTLPhase.antisymmetricExcitation.rawValue {
 
-            hydrogenNode.rotation = SCNVector4(
+            let wave =
+                0.08 * Float(sin(time * 5.0))
+
+            waterNode.position = SCNVector3(
+                wave,
+                0,
+                0
+            )
+
+            waterNode.rotation = SCNVector4(
+                0,
                 0,
                 1,
+                wave * 0.25
+            )
+
+        } else {
+
+            waterNode.position = SCNVector3(
                 0,
-                Float(
-                    sin(time * 0.8) * 0.025
+                0,
+                0
+            )
+
+            waterNode.rotation = SCNVector4(
+                0,
+                0,
+                1,
+                0
+            )
+        }
+
+        // ============================================================
+        // STAGE 10
+        // CARBON POSITIONING
+        //
+        // Carbon atoms descend from above the molecule and move
+        // into their final glucose positions.
+        // ============================================================
+
+        if stage >= QRTLPhase.carbonPositioning.rawValue {
+
+            carbonNode.opacity = 1.0
+
+            for (index, atom) in carbonAtoms.enumerated() {
+
+                guard index < carbonTargetPositions.count else {
+                    continue
+                }
+
+                let target =
+                    carbonTargetPositions[index]
+
+                // Each carbon begins above and slightly toward
+                // the center of the molecule.
+                let start = SCNVector3(
+                    target.x * 0.25,
+                    target.y * 0.25,
+                    2.8
                 )
-            )
+
+                atom.position = SCNVector3(
+                    start.x +
+                        (target.x - start.x) * eased,
+
+                    start.y +
+                        (target.y - start.y) * eased,
+
+                    start.z +
+                        (target.z - start.z) * eased
+                )
+
+                // Make each carbon clearly visible during assembly.
+                atom.opacity = CGFloat(
+                    min(
+                        1.0,
+                        max(
+                            0.15,
+                            Double(eased) * 1.4
+                        )
+                    )
+                )
+
+                // Small individual arrival pulse.
+                let pulse =
+                    1.0 +
+                    0.06 *
+                    Float(
+                        sin(
+                            time * 5.0 +
+                            Double(index) * 0.7
+                        )
+                    )
+
+                atom.scale = SCNVector3(
+                    pulse,
+                    pulse,
+                    pulse
+                )
+            }
+
+        } else {
+
+            carbonNode.opacity = 0.0
         }
 
-        // --------------------------------------------------------
-        // Oxygen positioning
-        // --------------------------------------------------------
+        // ============================================================
+        // STAGE 11
+        // HYDROGEN POSITIONING
+        // ============================================================
 
-        if stage >=
-            QRTLPhase.oxygenPositioning.rawValue {
+        if stage >= QRTLPhase.hydrogenPositioning.rawValue {
 
-            oxygenNode.scale = SCNVector3(
-                1.0 +
-                    Float(sin(time * 4.0) * 0.035),
-                1.0 +
-                    Float(sin(time * 4.0) * 0.035),
-                1.0 +
-                    Float(sin(time * 4.0) * 0.035)
-            )
+            hydrogenNode.opacity = 1.0
+
+            for (index, atom) in hydrogenAtoms.enumerated() {
+
+                guard index < hydrogenTargetPositions.count else {
+                    continue
+                }
+
+                let target =
+                    hydrogenTargetPositions[index]
+
+                let start = SCNVector3(
+                    target.x * 0.20,
+                    target.y * 0.20,
+                    2.6
+                )
+
+                atom.position = SCNVector3(
+                    start.x +
+                        (target.x - start.x) * eased,
+
+                    start.y +
+                        (target.y - start.y) * eased,
+
+                    start.z +
+                        (target.z - start.z) * eased
+                )
+
+                atom.opacity = CGFloat(
+                    min(
+                        1.0,
+                        max(
+                            0.15,
+                            Double(eased) * 1.4
+                        )
+                    )
+                )
+
+                let pulse =
+                    1.0 +
+                    0.08 *
+                    Float(
+                        sin(
+                            time * 6.0 +
+                            Double(index) * 0.5
+                        )
+                    )
+
+                atom.scale = SCNVector3(
+                    pulse,
+                    pulse,
+                    pulse
+                )
+            }
+
+        } else {
+
+            hydrogenNode.opacity = 0.0
         }
 
-        // --------------------------------------------------------
-        // Bond alignment
-        // --------------------------------------------------------
+        // ============================================================
+        // STAGE 12
+        // OXYGEN POSITIONING
+        // ============================================================
 
-        if stage >=
-            QRTLPhase.bondAlignment.rawValue {
+        if stage >= QRTLPhase.oxygenPositioning.rawValue {
+
+            oxygenNode.opacity = 1.0
+
+            for (index, atom) in oxygenAtoms.enumerated() {
+
+                guard index < oxygenTargetPositions.count else {
+                    continue
+                }
+
+                let target =
+                    oxygenTargetPositions[index]
+
+                let start = SCNVector3(
+                    target.x * 0.15,
+                    target.y * 0.15,
+                    3.0
+                )
+
+                atom.position = SCNVector3(
+                    start.x +
+                        (target.x - start.x) * eased,
+
+                    start.y +
+                        (target.y - start.y) * eased,
+
+                    start.z +
+                        (target.z - start.z) * eased
+                )
+
+                atom.opacity = CGFloat(
+                    min(
+                        1.0,
+                        max(
+                            0.15,
+                            Double(eased) * 1.4
+                        )
+                    )
+                )
+
+                let pulse =
+                    1.0 +
+                    0.08 *
+                    Float(
+                        sin(
+                            time * 5.0 +
+                            Double(index) * 0.6
+                        )
+                    )
+
+                atom.scale = SCNVector3(
+                    pulse,
+                    pulse,
+                    pulse
+                )
+            }
+
+        } else {
+
+            oxygenNode.opacity = 0.0
+        }
+
+        // ============================================================
+        // STAGE 13
+        // BOND ALIGNMENT
+        // ============================================================
+
+        if stage >= QRTLPhase.bondAlignment.rawValue {
+
+            bondNode.opacity = 1.0
+
+            for (index, bond) in molecularBonds.enumerated() {
+
+                let threshold =
+                    Double(index) /
+                    Double(
+                        max(
+                            molecularBonds.count - 1,
+                            1
+                        )
+                    )
+
+                let bondProgress =
+                    min(
+                        1.0,
+                        max(
+                            0.0,
+                            (progress - threshold * 0.35) / 0.65
+                        )
+                    )
+
+                let bondEase =
+                    Float(ease(bondProgress))
+
+                bond.opacity =
+                    CGFloat(bondEase)
+
+                let scale =
+                    0.05 +
+                    0.95 * bondEase
+
+                bond.scale = SCNVector3(
+                    scale,
+                    scale,
+                    scale
+                )
+            }
 
             let pulse =
                 1.0 +
-                Float(
-                    sin(time * 5.0) * 0.04
-                )
+                0.05 *
+                Float(sin(time * 6.0))
 
             bondNode.scale = SCNVector3(
                 pulse,
                 pulse,
                 pulse
             )
+
+        } else {
+
+            bondNode.opacity = 0.0
         }
 
-        // --------------------------------------------------------
-        // Ring closure
-        // --------------------------------------------------------
+        // ============================================================
+        // STAGE 14
+        // RING CLOSURE
+        // ============================================================
 
-        if stage >=
-            QRTLPhase.ringClosure.rawValue {
+        if stage >= QRTLPhase.ringClosure.rawValue {
 
+            ringNode.opacity = 1.0
+
+            let ringProgress =
+                Float(ease(progress))
+
+            let ringScale =
+                0.05 +
+                0.95 * ringProgress
+
+            ringNode.scale = SCNVector3(
+                ringScale,
+                ringScale,
+                ringScale
+            )
+
+            // Slow rotation while the ring closes.
             ringNode.rotation = SCNVector4(
                 0,
-                1,
                 0,
-                Float(time * 0.5)
+                1,
+                Float(time * 0.8)
+            )
+
+        } else {
+
+            ringNode.opacity = 0.0
+
+            ringNode.scale = SCNVector3(
+                0.01,
+                0.01,
+                0.01
             )
         }
 
-        // --------------------------------------------------------
-        // Final stabilization
-        // --------------------------------------------------------
+        // ============================================================
+        // STAGE 15
+        // GLUCOSE ASSEMBLY
+        // ============================================================
 
-        if stage >=
-            QRTLPhase.molecularStabilization.rawValue {
+        if stage >= QRTLPhase.glucoseAssembly.rawValue {
 
-            let pulse =
+            moleculeNode.opacity = 1.0
+
+            let assemblyPulse =
                 1.0 +
-                Float(
-                    sin(time * 2.0) * 0.015
-                )
+                0.035 *
+                Float(sin(time * 3.0))
 
             moleculeNode.scale = SCNVector3(
-                pulse,
-                pulse,
-                pulse
+                assemblyPulse,
+                assemblyPulse,
+                assemblyPulse
+            )
+        }
+
+        // ============================================================
+        // STAGE 16
+        // MOLECULAR STABILIZATION
+        // ============================================================
+
+        if stage >= QRTLPhase.molecularStabilization.rawValue {
+
+            stabilizationNode.opacity = 1.0
+
+            let stabilizationPulse =
+                1.0 +
+                0.12 *
+                Float(sin(time * 2.5))
+
+            stabilizationNode.scale = SCNVector3(
+                stabilizationPulse,
+                stabilizationPulse,
+                stabilizationPulse
+            )
+        }
+
+        // ============================================================
+        // STAGE 17
+        // FINAL SUGAR
+        // ============================================================
+
+        if stage >= QRTLPhase.finalSugar.rawValue {
+
+            moleculeNode.opacity = 1.0
+            carbonNode.opacity = 1.0
+            hydrogenNode.opacity = 1.0
+            oxygenNode.opacity = 1.0
+            bondNode.opacity = 1.0
+            ringNode.opacity = 1.0
+            stabilizationNode.opacity = 1.0
+
+            carbonAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            hydrogenAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            oxygenAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            molecularBonds.forEach {
+                $0.opacity = 1.0
+            }
+
+            // Final breathing motion.
+            let breathe =
+                1.0 +
+                0.05 *
+                Float(sin(time * 2.0))
+
+            moleculeNode.scale = SCNVector3(
+                breathe,
+                breathe,
+                breathe
+            )
+
+            ringNode.rotation = SCNVector4(
+                0,
+                0,
+                1,
+                Float(time * 0.35)
+            )
+
+            let halo =
+                1.0 +
+                0.10 *
+                Float(sin(time * 2.5))
+
+            stabilizationNode.scale = SCNVector3(
+                halo,
+                halo,
+                halo
             )
         }
     }

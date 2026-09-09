@@ -10,21 +10,21 @@ import SceneKit
 import UIKit
 import Combine
 
-
-
-
-// ============================================================
-// MARK: - CONTENT VIEW
-// ============================================================
-
 // ============================================================
 // MARK: - CONTENT VIEW
 // ============================================================
 
 struct ContentView: View {
 
-    @StateObject private var controller =
-        QRTLSceneController()
+    // ========================================================
+    // MARK: - QRTL CONTROLLER
+    // ========================================================
+
+    @StateObject private var controller = QRTLSceneController()
+
+    // ========================================================
+    // MARK: - BODY
+    // ========================================================
 
     var body: some View {
 
@@ -41,13 +41,10 @@ struct ContentView: View {
 
                 Divider()
                     .background(
-                        Color.white.opacity(
-                            0.15
-                        )
+                        Color.white.opacity(0.15)
                     )
 
-                GeometryReader {
-                    geometry in
+                GeometryReader { geometry in
 
                     ScrollView {
 
@@ -56,12 +53,10 @@ struct ContentView: View {
                         ) {
 
                             sceneSection(
-                                height:
-                                    max(
-                                        380,
-                                        geometry.size.width *
-                                        0.58
-                                    )
+                                height: max(
+                                    380,
+                                    geometry.size.width * 0.58
+                                )
                             )
 
                             sequencePanel
@@ -88,17 +83,15 @@ struct ContentView: View {
                 }
             }
         }
-        .preferredColorScheme(
-            .dark
-        )
+        .preferredColorScheme(.dark)
     }
+
 
     // ========================================================
     // MARK: - HEADER
     // ========================================================
 
-    private var header:
-        some View {
+    private var header: some View {
 
         VStack(
             alignment: .leading,
@@ -112,19 +105,15 @@ struct ContentView: View {
                     spacing: 2
                 ) {
 
-                    Text(
-                        "SPACE SUGAR"
-                    )
-                    .font(
-                        .system(
-                            size: 22,
-                            weight: .bold,
-                            design: .rounded
+                    Text("SPACE SUGAR")
+                        .font(
+                            .system(
+                                size: 22,
+                                weight: .bold,
+                                design: .rounded
+                            )
                         )
-                    )
-                    .foregroundColor(
-                        .white
-                    )
+                        .foregroundColor(.white)
 
                     Text(
                         "QRTL 3D ENERGY-SHELL MOLECULAR ASSEMBLY"
@@ -136,9 +125,7 @@ struct ContentView: View {
                             design: .rounded
                         )
                     )
-                    .foregroundColor(
-                        .cyan
-                    )
+                    .foregroundColor(.cyan)
                 }
 
                 Spacer()
@@ -158,9 +145,7 @@ struct ContentView: View {
                             design: .rounded
                         )
                     )
-                    .foregroundColor(
-                        .yellow
-                    )
+                    .foregroundColor(.yellow)
 
                     Text(
                         "OF \(QRTLPhase.allCases.count)"
@@ -173,9 +158,7 @@ struct ContentView: View {
                         )
                     )
                     .foregroundColor(
-                        .white.opacity(
-                            0.55
-                        )
+                        .white.opacity(0.55)
                     )
                 }
             }
@@ -190,6 +173,7 @@ struct ContentView: View {
         )
     }
 
+
     // ========================================================
     // MARK: - SCENE
     // ========================================================
@@ -200,14 +184,25 @@ struct ContentView: View {
 
         ZStack {
 
-            SceneView(
-                scene:
-                    makeScene(),
+            // =================================================
+            // IMPORTANT:
+            //
+            // DO NOT USE:
+            //
+            // SceneView(scene: makeScene())
+            //
+            // That creates a completely separate SCNScene and
+            // prevents QRTLSceneController.setupScene() from
+            // being used.
+            //
+            // QRTLSceneView owns the SCNView and calls:
+            //
+            // controller.setupScene(sceneView:)
+            //
+            // =================================================
 
-                options: [
-                    .allowsCameraControl,
-                    .autoenablesDefaultLighting
-                ]
+            QRTLSceneView(
+                controller: controller
             )
             .frame(
                 height: height
@@ -217,6 +212,10 @@ struct ContentView: View {
                     cornerRadius: 18
                 )
             )
+
+            // =================================================
+            // TOP PHASE LABEL
+            // =================================================
 
             VStack {
 
@@ -232,9 +231,7 @@ struct ContentView: View {
                             design: .rounded
                         )
                     )
-                    .foregroundColor(
-                        .white
-                    )
+                    .foregroundColor(.white)
                     .padding(
                         .horizontal,
                         10
@@ -246,9 +243,7 @@ struct ContentView: View {
                     .background(
                         Capsule()
                             .fill(
-                                Color.black.opacity(
-                                    0.65
-                                )
+                                Color.black.opacity(0.65)
                             )
                     )
 
@@ -256,6 +251,10 @@ struct ContentView: View {
                 }
 
                 Spacer()
+
+                // =================================================
+                // BOTTOM ANALOGY
+                // =================================================
 
                 HStack {
 
@@ -269,9 +268,7 @@ struct ContentView: View {
                             design: .rounded
                         )
                     )
-                    .foregroundColor(
-                        .yellow
-                    )
+                    .foregroundColor(.yellow)
                     .padding(
                         .horizontal,
                         12
@@ -285,48 +282,23 @@ struct ContentView: View {
                             cornerRadius: 10
                         )
                         .fill(
-                            Color.black.opacity(
-                                0.72
-                            )
+                            Color.black.opacity(0.72)
                         )
                     )
 
                     Spacer()
                 }
             }
-            .padding(
-                14
-            )
+            .padding(14)
         }
     }
 
-    // ========================================================
-    // MARK: - SCENE CREATION
-    // ========================================================
-
-    private func makeScene()
-        -> SCNScene {
-
-        let scene =
-            SCNScene()
-
-        scene.background.contents =
-            UIColor(
-                red: 0.015,
-                green: 0.02,
-                blue: 0.04,
-                alpha: 1
-            )
-
-        return scene
-    }
 
     // ========================================================
     // MARK: - SEQUENCE PANEL
     // ========================================================
 
-    private var sequencePanel:
-        some View {
+    private var sequencePanel: some View {
 
         VStack(
             alignment: .leading,
@@ -340,15 +312,13 @@ struct ContentView: View {
             Text(
                 "Control the molecular assembly one stage at a time."
             )
-            .font(
-                .caption
-            )
+            .font(.caption)
             .foregroundColor(
                 .white.opacity(0.7)
             )
 
             // ------------------------------------------------
-            // Step indicator
+            // STEP INDICATOR
             // ------------------------------------------------
 
             HStack {
@@ -363,14 +333,12 @@ struct ContentView: View {
                         design: .rounded
                     )
                 )
-                .foregroundColor(
-                    .cyan
-                )
+                .foregroundColor(.cyan)
 
                 Spacer()
 
                 Text(
-                    "\(controller.phase.title)"
+                    controller.phase.title
                 )
                 .font(
                     .system(
@@ -379,51 +347,39 @@ struct ContentView: View {
                         design: .rounded
                     )
                 )
-                .multilineTextAlignment(
-                    .trailing
-                )
+                .multilineTextAlignment(.trailing)
                 .foregroundColor(
                     .white.opacity(0.75)
                 )
             }
 
             // ------------------------------------------------
-            // Step slider
+            // STEP SLIDER
             // ------------------------------------------------
 
             Slider(
-                value:
-                    Binding(
-                        get: {
-                            Double(
-                                controller.phaseProgress
-                            )
-                        },
-
-                        set: {
-                            value in
-
-                            controller.goToStep(
-                                Int(
-                                    value.rounded()
-                                )
-                            )
-                        }
-                    ),
-
+                value: Binding(
+                    get: {
+                        Double(
+                            controller.phaseProgress
+                        )
+                    },
+                    set: { value in
+                        controller.goToStep(
+                            Int(value.rounded())
+                        )
+                    }
+                ),
                 in:
                     0...Double(
                         QRTLPhase.allCases.count - 1
                     ),
-
                 step: 1
             )
-            .tint(
-                .cyan
-            )
+            .tint(.cyan)
 
             // ------------------------------------------------
-            // Previous / Next
+            // PREVIOUS / NEXT
             // ------------------------------------------------
 
             HStack(
@@ -438,12 +394,10 @@ struct ContentView: View {
 
                     Label(
                         "Previous",
-                        systemImage:
-                            "backward.fill"
+                        systemImage: "backward.fill"
                     )
                     .frame(
-                        maxWidth:
-                            .infinity
+                        maxWidth: .infinity
                     )
                 }
                 .buttonStyle(
@@ -461,12 +415,10 @@ struct ContentView: View {
 
                     Label(
                         "Next",
-                        systemImage:
-                            "forward.fill"
+                        systemImage: "forward.fill"
                     )
                     .frame(
-                        maxWidth:
-                            .infinity
+                        maxWidth: .infinity
                     )
                 }
                 .buttonStyle(
@@ -479,7 +431,7 @@ struct ContentView: View {
             }
 
             // ------------------------------------------------
-            // Play / Pause / Reset
+            // PLAY / PAUSE / RESET
             // ------------------------------------------------
 
             HStack(
@@ -494,12 +446,10 @@ struct ContentView: View {
 
                     Label(
                         "Play Sequence",
-                        systemImage:
-                            "play.fill"
+                        systemImage: "play.fill"
                     )
                     .frame(
-                        maxWidth:
-                            .infinity
+                        maxWidth: .infinity
                     )
                 }
                 .buttonStyle(
@@ -514,12 +464,10 @@ struct ContentView: View {
 
                     Label(
                         "Pause",
-                        systemImage:
-                            "pause.fill"
+                        systemImage: "pause.fill"
                     )
                     .frame(
-                        maxWidth:
-                            .infinity
+                        maxWidth: .infinity
                     )
                 }
                 .buttonStyle(
@@ -543,7 +491,7 @@ struct ContentView: View {
             }
 
             // ------------------------------------------------
-            // Phase explanation
+            // PHASE EXPLANATION
             // ------------------------------------------------
 
             VStack(
@@ -554,61 +502,42 @@ struct ContentView: View {
                 Text(
                     "WHAT IS HAPPENING?"
                 )
-                .font(
-                    .caption
-                )
-                .fontWeight(
-                    .bold
-                )
-                .foregroundColor(
-                    .cyan
-                )
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(.cyan)
 
                 Text(
                     controller.phase.explanation
                 )
-                .font(
-                    .caption
-                )
-                .foregroundColor(
-                    .white
-                )
+                .font(.caption)
+                .foregroundColor(.white)
 
                 Text(
                     "Analogy: " +
                     controller.phase.analogy
                 )
-                .font(
-                    .caption
-                )
+                .font(.caption)
                 .italic()
-                .foregroundColor(
-                    .yellow
-                )
+                .foregroundColor(.yellow)
             }
-            .padding(
-                12
-            )
+            .padding(12)
             .background(
                 RoundedRectangle(
                     cornerRadius: 12
                 )
                 .fill(
-                    Color.white.opacity(
-                        0.06
-                    )
+                    Color.white.opacity(0.06)
                 )
             )
         }
-
     }
+
 
     // ========================================================
     // MARK: - REACTION CONDITIONS
     // ========================================================
 
-    private var reactionConditionsCard:
-        some View {
+    private var reactionConditionsCard: some View {
 
         VStack(
             alignment: .leading,
@@ -621,49 +550,33 @@ struct ContentView: View {
                     systemName:
                         "waveform.path.ecg"
                 )
-                .foregroundColor(
-                    .cyan
-                )
+                .foregroundColor(.cyan)
 
                 Text(
                     "QRTL REACTION CONDITIONS"
                 )
-                .font(
-                    .headline
-                )
-                .foregroundColor(
-                    .white
-                )
+                .font(.headline)
+                .foregroundColor(.white)
 
                 Spacer()
 
-                Text(
-                    "LIVE"
-                )
-                .font(
-                    .system(
-                        size: 9,
-                        weight: .bold
+                Text("LIVE")
+                    .font(
+                        .system(
+                            size: 9,
+                            weight: .bold
+                        )
                     )
-                )
-                .foregroundColor(
-                    .yellow
-                )
+                    .foregroundColor(.yellow)
             }
 
             Text(
                 "The values below change with the selected step and with the simulation controls."
             )
-            .font(
-                .caption
-            )
+            .font(.caption)
             .foregroundColor(
                 .white.opacity(0.65)
             )
-
-            // ------------------------------------------------
-            // Electrical input
-            // ------------------------------------------------
 
             conditionSection(
                 title: "ENERGY INPUT",
@@ -672,19 +585,16 @@ struct ContentView: View {
                 analogy:
                     "Like the fuel flowing into an engine.",
                 rows: [
-
                     (
                         "Current",
                         controller.current,
                         "input level"
                     ),
-
                     (
                         "Current Efficiency",
                         controller.currentEfficiency,
                         "usable fraction"
                     ),
-
                     (
                         "Effective Input",
                         controller.effectiveInput,
@@ -693,10 +603,6 @@ struct ContentView: View {
                 ]
             )
 
-            // ------------------------------------------------
-            // Pressure
-            // ------------------------------------------------
-
             conditionSection(
                 title: "QRTL PRESSURE",
                 subtitle:
@@ -704,7 +610,6 @@ struct ContentView: View {
                 analogy:
                     "Like how tightly energy is packed inside a chamber.",
                 rows: [
-
                     (
                         "Pressure Index",
                         controller.qrtlPressure,
@@ -713,10 +618,6 @@ struct ContentView: View {
                 ]
             )
 
-            // ------------------------------------------------
-            // Shell
-            // ------------------------------------------------
-
             conditionSection(
                 title: "ENERGY SHELL",
                 subtitle:
@@ -724,31 +625,26 @@ struct ContentView: View {
                 analogy:
                     "Like an invisible bubble surrounding the nucleus.",
                 rows: [
-
                     (
                         "Shell Energy",
                         controller.shellEnergy,
                         "energy index"
                     ),
-
                     (
                         "Shell Size",
                         controller.shellRadius,
                         "radius"
                     ),
-
                     (
                         "Shell Thickness",
                         controller.shellWidth,
                         "width"
                     ),
-
                     (
                         "Shell Coupling",
                         controller.shellCoupling,
                         "interaction"
                     ),
-
                     (
                         "Shell Coherence",
                         controller.shellCoherence,
@@ -757,10 +653,6 @@ struct ContentView: View {
                 ]
             )
 
-            // ------------------------------------------------
-            // Forces
-            // ------------------------------------------------
-
             conditionSection(
                 title: "FORCES",
                 subtitle:
@@ -768,25 +660,21 @@ struct ContentView: View {
                 analogy:
                     "Like several hands pushing, pulling, and holding pieces together.",
                 rows: [
-
                     (
                         "QRTL Force",
                         controller.qrtlForce,
                         "model force"
                     ),
-
                     (
                         "External Force",
                         controller.externalForce,
                         "outside influence"
                     ),
-
                     (
                         "Motion",
                         controller.kineticForce,
                         "movement"
                     ),
-
                     (
                         "Bond Strength",
                         controller.bondForce,
@@ -795,10 +683,6 @@ struct ContentView: View {
                 ]
             )
 
-            // ------------------------------------------------
-            // Energy balance
-            // ------------------------------------------------
-
             conditionSection(
                 title: "ENERGY BALANCE",
                 subtitle:
@@ -806,13 +690,11 @@ struct ContentView: View {
                 analogy:
                     "Like filling a tank while some energy leaks out.",
                 rows: [
-
                     (
                         "Reaction Energy",
                         controller.reactionEnergy,
                         "combined index"
                     ),
-
                     (
                         "Energy Loss",
                         controller.energyLoss,
@@ -820,10 +702,6 @@ struct ContentView: View {
                     )
                 ]
             )
-
-            // ------------------------------------------------
-            // Model unit note
-            // ------------------------------------------------
 
             Text(
                 "MODEL UNITS: These displayed quantities are normalized simulation indices unless a physical unit is explicitly identified. QRTL Pressure is not Pascals and Reaction Energy is not joules."
@@ -840,6 +718,7 @@ struct ContentView: View {
             )
         }
     }
+
 
     // ========================================================
     // MARK: - CONDITION SECTION
@@ -863,37 +742,27 @@ struct ContentView: View {
             spacing: 7
         ) {
 
-            Text(
-                title
-            )
-            .font(
-                .system(
-                    size: 12,
-                    weight: .bold,
-                    design: .rounded
+            Text(title)
+                .font(
+                    .system(
+                        size: 12,
+                        weight: .bold,
+                        design: .rounded
+                    )
                 )
-            )
-            .foregroundColor(
-                .cyan
-            )
+                .foregroundColor(.cyan)
 
-            Text(
-                subtitle
-            )
-            .font(
-                .caption2
-            )
-            .foregroundColor(
-                .white.opacity(0.65)
-            )
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundColor(
+                    .white.opacity(0.65)
+                )
 
             Text(
                 "Analogy: " +
                 analogy
             )
-            .font(
-                .caption2
-            )
+            .font(.caption2)
             .italic()
             .foregroundColor(
                 .yellow.opacity(0.9)
@@ -902,27 +771,19 @@ struct ContentView: View {
             ForEach(
                 rows,
                 id: \.0
-            ) {
-                row in
+            ) { row in
 
                 HStack {
 
-                    Text(
-                        row.0
-                    )
-                    .font(
-                        .caption
-                    )
-                    .foregroundColor(
-                        .white
-                    )
+                    Text(row.0)
+                        .font(.caption)
+                        .foregroundColor(.white)
 
                     Spacer()
 
                     Text(
                         String(
-                            format:
-                                "%.3f",
+                            format: "%.3f",
                             row.1
                         )
                     )
@@ -933,23 +794,17 @@ struct ContentView: View {
                             design: .monospaced
                         )
                     )
-                    .foregroundColor(
-                        .white
-                    )
+                    .foregroundColor(.white)
 
-                    Text(
-                        row.2
-                    )
-                    .font(
-                        .caption2
-                    )
-                    .foregroundColor(
-                        .white.opacity(0.45)
-                    )
-                    .frame(
-                        width: 90,
-                        alignment: .leading
-                    )
+                    Text(row.2)
+                        .font(.caption2)
+                        .foregroundColor(
+                            .white.opacity(0.45)
+                        )
+                        .frame(
+                            width: 90,
+                            alignment: .leading
+                        )
                 }
                 .padding(
                     .vertical,
@@ -957,27 +812,23 @@ struct ContentView: View {
                 )
             }
         }
-        .padding(
-            10
-        )
+        .padding(10)
         .background(
             RoundedRectangle(
                 cornerRadius: 10
             )
             .fill(
-                Color.white.opacity(
-                    0.045
-                )
+                Color.white.opacity(0.045)
             )
         )
     }
+
 
     // ========================================================
     // MARK: - MODEL CONTROLS
     // ========================================================
 
-    private var modelControls:
-        some View {
+    private var modelControls: some View {
 
         VStack(
             alignment: .leading,
@@ -988,321 +839,185 @@ struct ContentView: View {
                 "MODEL CONTROLS"
             )
 
-            // ------------------------------------------------
-            // Current
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Current",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.current
-                        },
-                        set: {
-                            controller.setCurrent(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "Current",
+                value: Binding(
+                    get: {
+                        controller.current
+                    },
+                    set: {
+                        controller.setCurrent($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "Electrical input entering the modeled system.",
-
                 analogy:
                     "Think of current as the fuel flowing into the reaction chamber."
             )
 
-            // ------------------------------------------------
-            // Current efficiency
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Current Efficiency",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.currentEfficiency
-                        },
-                        set: {
-                            controller.setCurrentEfficiency(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "Current Efficiency",
+                value: Binding(
+                    get: {
+                        controller.currentEfficiency
+                    },
+                    set: {
+                        controller.setCurrentEfficiency($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "The fraction of incoming current treated as useful modeled QRTL input.",
-
                 analogy:
                     "Like an engine's efficiency: not all fuel becomes useful motion."
             )
 
-            // ------------------------------------------------
-            // Shell energy
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Energy Shell",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.shellEnergy
-                        },
-                        set: {
-                            controller.setShellEnergy(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1.5,
-
+                title: "Energy Shell",
+                value: Binding(
+                    get: {
+                        controller.shellEnergy
+                    },
+                    set: {
+                        controller.setShellEnergy($0)
+                    }
+                ),
+                range: 0...1.5,
                 description:
                     "Strength of the modeled energy shell.",
-
                 analogy:
                     "Like the amount of energy stored inside an invisible bubble."
             )
 
-            // ------------------------------------------------
-            // Shell radius
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Shell Size",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.shellRadius
-                        },
-                        set: {
-                            controller.setShellRadius(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0.5...3.0,
-
+                title: "Shell Size",
+                value: Binding(
+                    get: {
+                        controller.shellRadius
+                    },
+                    set: {
+                        controller.setShellRadius($0)
+                    }
+                ),
+                range: 0.5...3.0,
                 description:
                     "Radial location of the modeled energy shell.",
-
                 analogy:
                     "Like changing the size of a protective energy bubble."
             )
 
-            // ------------------------------------------------
-            // Shell width
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Shell Thickness",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.shellWidth
-                        },
-                        set: {
-                            controller.setShellWidth(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0.05...1.0,
-
+                title: "Shell Thickness",
+                value: Binding(
+                    get: {
+                        controller.shellWidth
+                    },
+                    set: {
+                        controller.setShellWidth($0)
+                    }
+                ),
+                range: 0.05...1.0,
                 description:
                     "Width of the active shell region.",
-
                 analogy:
                     "Like changing a thin wall into a thicker energy band."
             )
 
-            // ------------------------------------------------
-            // Coupling
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Shell Coupling",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.shellCoupling
-                        },
-                        set: {
-                            controller.setShellCoupling(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "Shell Coupling",
+                value: Binding(
+                    get: {
+                        controller.shellCoupling
+                    },
+                    set: {
+                        controller.setShellCoupling($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "Strength of the modeled interaction between the shell and matter.",
-
                 analogy:
                     "Like turning up the grip between the energy field and the material."
             )
 
-            // ------------------------------------------------
-            // Coherence
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Shell Coherence",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.shellCoherence
-                        },
-                        set: {
-                            controller.setShellCoherence(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "Shell Coherence",
+                value: Binding(
+                    get: {
+                        controller.shellCoherence
+                    },
+                    set: {
+                        controller.setShellCoherence($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "Degree of organization of the modeled shell.",
-
                 analogy:
                     "Like an orchestra: coherence means the players are staying in rhythm."
             )
 
-            // ------------------------------------------------
-            // Energy loss
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Energy Loss",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.energyLoss
-                        },
-                        set: {
-                            controller.setEnergyLoss(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...0.5,
-
+                title: "Energy Loss",
+                value: Binding(
+                    get: {
+                        controller.energyLoss
+                    },
+                    set: {
+                        controller.setEnergyLoss($0)
+                    }
+                ),
+                range: 0...0.5,
                 description:
                     "Fraction of modeled shell energy treated as lost.",
-
                 analogy:
                     "Like heat escaping from an insulated tank."
             )
 
-            // ------------------------------------------------
-            // External force
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "External Force",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.externalForce
-                        },
-                        set: {
-                            controller.setExternalForce(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "External Force",
+                value: Binding(
+                    get: {
+                        controller.externalForce
+                    },
+                    set: {
+                        controller.setExternalForce($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "Modeled influence coming from outside the QRTL system.",
-
                 analogy:
                     "Like someone pushing the structure from outside."
             )
 
-            // ------------------------------------------------
-            // Motion
-            // ------------------------------------------------
-
             QRTLSlider(
-                title:
-                    "Motion / Kinetic",
-
-                value:
-                    Binding(
-                        get: {
-                            controller.kineticForce
-                        },
-                        set: {
-                            controller.setKineticForce(
-                                $0
-                            )
-                        }
-                    ),
-
-                range:
-                    0...1,
-
+                title: "Motion / Kinetic",
+                value: Binding(
+                    get: {
+                        controller.kineticForce
+                    },
+                    set: {
+                        controller.setKineticForce($0)
+                    }
+                ),
+                range: 0...1,
                 description:
                     "Modeled contribution associated with movement.",
-
                 analogy:
                     "Like shaking a box: motion helps determine how the pieces move."
             )
 
-            // ------------------------------------------------
-            // Strong force replacement
-            // ------------------------------------------------
-
             Toggle(
-                isOn:
-                    Binding(
-                        get: {
-                            controller.replaceStrongForce
-                        },
-                        set: {
-                            controller.replaceStrongForce =
-                                $0
-                        }
-                    )
+                isOn: Binding(
+                    get: {
+                        controller.replaceStrongForce
+                    },
+                    set: {
+                        controller.replaceStrongForce = $0
+                    }
+                )
             ) {
 
                 VStack(
@@ -1313,33 +1028,27 @@ struct ContentView: View {
                     Text(
                         "Use QRTL interaction in the model"
                     )
-                    .foregroundColor(
-                        .white
-                    )
+                    .foregroundColor(.white)
 
                     Text(
                         "This control determines whether the QRTL interaction is treated as the modeled replacement interaction."
                     )
-                    .font(
-                        .caption2
-                    )
+                    .font(.caption2)
                     .foregroundColor(
                         .white.opacity(0.55)
                     )
                 }
             }
-            .tint(
-                .cyan
-            )
+            .tint(.cyan)
         }
     }
+
 
     // ========================================================
     // MARK: - HOW TO READ
     // ========================================================
 
-    private var howToReadCard:
-        some View {
+    private var howToReadCard: some View {
 
         VStack(
             alignment: .leading,
@@ -1351,65 +1060,49 @@ struct ContentView: View {
             )
 
             explanationRow(
-                title:
-                    "1. Current",
-
+                title: "1. Current",
                 text:
                     "Current represents the incoming electrical input."
             )
 
             explanationRow(
-                title:
-                    "2. Efficiency",
-
+                title: "2. Efficiency",
                 text:
                     "Efficiency determines how much of that input becomes useful modeled QRTL energy."
             )
 
             explanationRow(
-                title:
-                    "3. Pressure",
-
+                title: "3. Pressure",
                 text:
                     "The pressure index describes how concentrated the modeled shell energy is within its shell volume."
             )
 
             explanationRow(
-                title:
-                    "4. Energy Shell",
-
+                title: "4. Energy Shell",
                 text:
                     "The shell represents the modeled region where QRTL energy is concentrated."
             )
 
             explanationRow(
-                title:
-                    "5. Coherence",
-
+                title: "5. Coherence",
                 text:
                     "Coherence describes how organized the modeled energy pattern is."
             )
 
             explanationRow(
-                title:
-                    "6. Coupling",
-
+                title: "6. Coupling",
                 text:
                     "Coupling describes how strongly the modeled shell interacts with matter."
             )
 
             explanationRow(
-                title:
-                    "7. Forces",
-
+                title: "7. Forces",
                 text:
                     "QRTL, external, motion, and bond values describe the modeled influences affecting assembly."
             )
 
             explanationRow(
-                title:
-                    "8. Reaction Energy",
-
+                title: "8. Reaction Energy",
                 text:
                     "Reaction Energy is a normalized combined index derived from shell energy, coupling, and coherence."
             )
@@ -1428,8 +1121,8 @@ struct ContentView: View {
                 .yellow.opacity(0.8)
             )
         }
-
     }
+
 
     // ========================================================
     // MARK: - EXPLANATION ROW
@@ -1445,30 +1138,19 @@ struct ContentView: View {
             spacing: 3
         ) {
 
-            Text(
-                title
-            )
-            .font(
-                .caption
-            )
-            .fontWeight(
-                .bold
-            )
-            .foregroundColor(
-                .cyan
-            )
+            Text(title)
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(.cyan)
 
-            Text(
-                text
-            )
-            .font(
-                .caption
-            )
-            .foregroundColor(
-                .white.opacity(0.75)
-            )
+            Text(text)
+                .font(.caption)
+                .foregroundColor(
+                    .white.opacity(0.75)
+                )
         }
     }
+
 
     // ========================================================
     // MARK: - SECTION TITLE
@@ -1478,19 +1160,15 @@ struct ContentView: View {
         _ title: String
     ) -> some View {
 
-        Text(
-            title
-        )
-        .font(
-            .system(
-                size: 14,
-                weight: .bold,
-                design: .rounded
+        Text(title)
+            .font(
+                .system(
+                    size: 14,
+                    weight: .bold,
+                    design: .rounded
+                )
             )
-        )
-        .foregroundColor(
-            .white
-        )
+            .foregroundColor(.white)
     }
 }
 
@@ -1500,6 +1178,5 @@ struct ContentView: View {
 // ============================================================
 
 #Preview {
-
     ContentView()
 }
