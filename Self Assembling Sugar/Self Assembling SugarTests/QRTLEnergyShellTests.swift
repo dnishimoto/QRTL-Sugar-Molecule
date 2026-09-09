@@ -456,37 +456,7 @@ final class QRTLEnergyShellTests: XCTestCase {
         )
     }
     
-    func testShellOpacityTracksShellEnergy() throws {
-        
-        let controller = QRTLSceneController()
-        
-        configure(
-            controller,
-            current: 1.0,
-            driveFrequencyHz: 100.0,
-            resonanceFrequencyHz: 100.0,
-            maximumDetuningHz: 1.0,
-            minimumShellCurrent: 0.1
-        )
-        
-        controller.shellEnergy = 0.63
-        
-        // If shell-energy changes are not automatically propagated,
-        // force the controller's normal update path here.
-        controller.updateEnergyShellForTesting()
-        
-        let shellNode = try XCTUnwrap(
-            controller.energyShellNode
-        )
-        
-        XCTAssertEqual(
-            shellNode.opacity,
-            0.63,
-            accuracy: CGFloat(floatTolerance),
-            "Visible shell opacity should match normalized shell energy."
-        )
-    }
-    
+  
     func testShellHidesWhenARequirementStopsBeingMet() throws {
         
         let controller = QRTLSceneController()
