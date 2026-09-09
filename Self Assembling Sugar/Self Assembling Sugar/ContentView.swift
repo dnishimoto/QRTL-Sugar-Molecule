@@ -15,7 +15,8 @@ import Combine
 // ============================================================
 
 struct ContentView: View {
-
+    @State
+    var showingAbout : Bool = false
     // ========================================================
     // MARK: - QRTL CONTROLLER
     // ========================================================
@@ -27,63 +28,81 @@ struct ContentView: View {
     // ========================================================
 
     var body: some View {
-
-        ZStack {
-
-            Color.black
-                .ignoresSafeArea()
-
-            VStack(
-                spacing: 0
-            ) {
-
-                header
-
-                Divider()
-                    .background(
-                        Color.white.opacity(0.15)
-                    )
-
-                GeometryReader { geometry in
-
-                    ScrollView {
-
-                        VStack(
-                            spacing: 16
-                        ) {
-
-                            sceneSection(
-                                height: max(
-                                    380,
-                                    geometry.size.width * 0.58
+        NavigationStack{
+            ZStack {
+                
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(
+                    spacing: 0
+                ) {
+                    
+                    header
+                    
+                    Divider()
+                        .background(
+                            Color.white.opacity(0.15)
+                        )
+                    
+                    GeometryReader { geometry in
+                        
+                        ScrollView {
+                            
+                            VStack(
+                                spacing: 16
+                            ) {
+                                
+                                sceneSection(
+                                    height: max(
+                                        380,
+                                        geometry.size.width * 0.58
+                                    )
                                 )
+                                
+                                sequencePanel
+                                
+                                reactionConditionsCard
+                                
+                                modelControls
+                                
+                                howToReadCard
+                                
+                                Spacer(
+                                    minLength: 30
+                                )
+                            }
+                            .padding(
+                                .horizontal,
+                                14
                             )
-
-                            sequencePanel
-
-                            reactionConditionsCard
-
-                            modelControls
-
-                            howToReadCard
-
-                            Spacer(
-                                minLength: 30
+                            .padding(
+                                .top,
+                                14
                             )
                         }
-                        .padding(
-                            .horizontal,
-                            14
-                        )
-                        .padding(
-                            .top,
-                            14
-                        )
                     }
                 }
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingAbout = true
+                    } label: {
+                        Label("About", systemImage: "info.circle")
+                    }
+                }
+            }
+            
         }
+        
         .preferredColorScheme(.dark)
+
+        .sheet(isPresented: $showingAbout) {
+            AboutView()
+        }
+ 
+
     }
 
 
