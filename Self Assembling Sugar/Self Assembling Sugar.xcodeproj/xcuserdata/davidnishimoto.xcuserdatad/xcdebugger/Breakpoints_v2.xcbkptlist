@@ -14,8 +14,8 @@
             filePath = "Self Assembling Sugar/QRTLSceneController.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "2481"
-            endingLineNumber = "2481"
+            startingLineNumber = "2583"
+            endingLineNumber = "2583"
             landmarkName = "renderer(_:updateAtTime:)"
             landmarkType = "7">
          </BreakpointContent>
@@ -30,8 +30,8 @@
             filePath = "Self Assembling Sugar/QRTLSceneController.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "138"
-            endingLineNumber = "138"
+            startingLineNumber = "159"
+            endingLineNumber = "159"
             landmarkName = "setupScene(sceneView:)"
             landmarkType = "7">
          </BreakpointContent>

@@ -15,6 +15,23 @@ final class QRTLSceneController:
     ObservableObject,
     SCNSceneRendererDelegate
 {
+   
+     // New current and resonance configuration.
+     private(set) var minimumShellCurrent: Double = 0
+     private(set) var driveFrequencyHz: Double = 0
+     private(set) var resonanceFrequencyHz: Double = 0
+     private(set) var maximumFrequencyDetuningHz: Double = 0
+     private(set) var frequencyDetuningHz: Double = 0
+
+     // New shell requirements.
+     private(set) var minimumShellCoherence: Double = 0.80
+     private(set) var minimumShellCoupling: Double = 0.70
+
+     // New computed / observable shell state.
+     private(set) var isFrequencyLocked = false
+     private(set) var isEnergyShellActive = false
+     private(set) var energyShellNode: SCNNode?
+    
     private var carbonTargetPositions: [SCNVector3] = []
     private var hydrogenTargetPositions: [SCNVector3] = []
     private var oxygenTargetPositions: [SCNVector3] = []
@@ -114,7 +131,11 @@ final class QRTLSceneController:
  
     private var sourceStartPositions: [SCNVector3] = []
     private var sourceTargetPositions: [SCNVector3] = []
+    private(set) var testingEnergyShellIsHidden: Bool = true
 
+    private(set) var testingEnergyShellOpacity: Double = 0.0
+
+    private(set) var testingEnergyShellEnergy: Double = 0.0
 
     override init() {
         super.init()
@@ -366,9 +387,7 @@ final class QRTLSceneController:
         sceneView.isPlaying = true
         sceneView.rendersContinuously = true
     }
-    // ============================================================
-    // MARK: - 17-STAGE PHASE MODEL
-    // ============================================================
+ 
 
     private func configurePhase(_ newPhase: QRTLPhase) {
 
@@ -679,6 +698,89 @@ final class QRTLSceneController:
         updateSceneForCurrentPhase()
     }
     
+    func updateEnergyShellForTesting() {
+        // Clamp the modeled shell energy to the visible range.
+        let clampedEnergy = min(
+            max(shellEnergy, 0.0),
+            1.0
+        )
+
+        // The shell is active only when the controller says
+        // the current phase should display the energy shell.
+        let shouldBeActive = isEnergyShellActive
+
+        // Store the values used by the SceneKit implementation.
+        //
+        // These properties make the calculation testable without
+        // constructing SCNNode/SCNSphere objects in the test target.
+        testingEnergyShellIsHidden = !shouldBeActive
+        testingEnergyShellOpacity = shouldBeActive ? clampedEnergy : 0.0
+        testingEnergyShellEnergy = clampedEnergy
+    }
+    func configureEnergyShellForTesting(
+        current: Double,
+        driveFrequencyHz: Double,
+        resonanceFrequencyHz: Double,
+        maximumDetuningHz: Double,
+        minimumShellCurrent: Double,
+        coherence: Double,
+        coupling: Double
+    ) {
+        self.current = current
+        self.driveFrequencyHz = driveFrequencyHz
+        self.resonanceFrequencyHz = resonanceFrequencyHz
+        self.maximumFrequencyDetuningHz = maximumDetuningHz
+        self.minimumShellCurrent = minimumShellCurrent
+        self.shellCoherence = coherence
+        self.shellCoupling = coupling
+
+        updateEnergyShellState()
+    }
+
+    func updateEnergyShellState() {
+        frequencyDetuningHz = abs(
+            driveFrequencyHz - resonanceFrequencyHz
+        )
+
+        isFrequencyLocked =
+            frequencyDetuningHz <= maximumFrequencyDetuningHz
+
+        isEnergyShellActive =
+            current >= minimumShellCurrent &&
+            isFrequencyLocked &&
+            shellCoherence >= minimumShellCoherence &&
+            shellCoupling >= minimumShellCoupling
+
+        updateEnergyShellNode()
+    }
+
+    private func updateEnergyShellNode() {
+        guard isEnergyShellActive else {
+            energyShellNode?.isHidden = true
+            return
+        }
+
+        if energyShellNode == nil {
+            let sphere = SCNSphere(radius: 1.0)
+            sphere.segmentCount = 48
+
+            let material = SCNMaterial()
+            material.diffuse.contents = UIColor.cyan.withAlphaComponent(0.25)
+            material.emission.contents = UIColor.cyan
+            material.transparency = 0.25
+
+            sphere.materials = [material]
+
+            let node = SCNNode(geometry: sphere)
+            node.name = "QRTLEnergyShell"
+            energyShellNode = node
+        }
+
+        energyShellNode?.isHidden = false
+        energyShellNode?.opacity = CGFloat(
+            min(max(shellEnergy, 0.0), 1.0)
+        )
+    }
     func setExternalForce(_ value: Double) {
 
         externalForce = max(
