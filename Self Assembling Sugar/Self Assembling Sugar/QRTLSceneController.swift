@@ -1159,19 +1159,12 @@ final class QRTLSceneController:
         }
     }
 
-    // ============================================================
-    // MARK: - BUILD PROGRESSIVE GLUCOSE
-    // ============================================================
-
-    // ============================================================
-    // MARK: - BUILD PROGRESSIVE GLUCOSE
-    // ============================================================
-
+  
     private func buildProgressiveGlucose() {
 
-        // ========================================================
+        // ============================================================
         // CLEAR PREVIOUS MOLECULAR GEOMETRY
-        // ========================================================
+        // ============================================================
 
         carbonNode.childNodes.forEach {
             $0.removeFromParentNode()
@@ -1193,9 +1186,13 @@ final class QRTLSceneController:
             $0.removeFromParentNode()
         }
 
-        // ========================================================
+        stabilizationNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        // ============================================================
         // CLEAR ARRAYS
-        // ========================================================
+        // ============================================================
 
         carbonAtoms.removeAll()
         hydrogenAtoms.removeAll()
@@ -1208,9 +1205,9 @@ final class QRTLSceneController:
 
         glucoseCreated = false
 
-        // ========================================================
+        // ============================================================
         // CARBON TARGET POSITIONS
-        // ========================================================
+        // ============================================================
 
         let carbonPositions: [SCNVector3] = [
 
@@ -1251,9 +1248,9 @@ final class QRTLSceneController:
             )
         ]
 
-        // ========================================================
+        // ============================================================
         // HYDROGEN TARGET POSITIONS
-        // ========================================================
+        // ============================================================
 
         let hydrogenPositions: [SCNVector3] = [
 
@@ -1330,9 +1327,9 @@ final class QRTLSceneController:
             )
         ]
 
-        // ========================================================
+        // ============================================================
         // OXYGEN TARGET POSITIONS
-        // ========================================================
+        // ============================================================
 
         let oxygenPositions: [SCNVector3] = [
 
@@ -1373,30 +1370,23 @@ final class QRTLSceneController:
             )
         ]
 
-        // ========================================================
+        // ============================================================
         // STORE TARGET POSITIONS
-        // ========================================================
+        // ============================================================
 
         carbonTargetPositions = carbonPositions
         hydrogenTargetPositions = hydrogenPositions
         oxygenTargetPositions = oxygenPositions
 
-        // ========================================================
-        // ASSEMBLY SOURCE HEIGHT
-        // ========================================================
-        //
-        // All atoms begin above their final molecular positions.
-        // Their X/Y coordinates are already aligned with their
-        // eventual positions. The assembly animation will lower
-        // them into the molecular structure.
-        //
-        // ========================================================
+        // ============================================================
+        // INITIAL ASSEMBLY POSITION
+        // ============================================================
 
         let assemblyHeight: Float = 2.0
 
-        // ========================================================
-        // CARBON
-        // ========================================================
+        // ============================================================
+        // CARBON ATOMS
+        // ============================================================
 
         for position in carbonPositions {
 
@@ -1405,24 +1395,21 @@ final class QRTLSceneController:
                 color: UIColor.black
             )
 
-            // Start above the final molecular structure.
             atom.position = SCNVector3(
                 position.x,
                 position.y,
                 assemblyHeight
             )
 
-            // Hidden until the carbon-positioning phase.
             atom.opacity = 0.0
 
             carbonNode.addChildNode(atom)
-
             carbonAtoms.append(atom)
         }
 
-        // ========================================================
-        // HYDROGEN
-        // ========================================================
+        // ============================================================
+        // HYDROGEN ATOMS
+        // ============================================================
 
         for position in hydrogenPositions {
 
@@ -1431,24 +1418,21 @@ final class QRTLSceneController:
                 color: UIColor.white
             )
 
-            // Start above the final molecular structure.
             atom.position = SCNVector3(
                 position.x,
                 position.y,
                 assemblyHeight
             )
 
-            // Hidden until the hydrogen-positioning phase.
             atom.opacity = 0.0
 
             hydrogenNode.addChildNode(atom)
-
             hydrogenAtoms.append(atom)
         }
 
-        // ========================================================
-        // OXYGEN
-        // ========================================================
+        // ============================================================
+        // OXYGEN ATOMS
+        // ============================================================
 
         for position in oxygenPositions {
 
@@ -1457,24 +1441,21 @@ final class QRTLSceneController:
                 color: UIColor.red
             )
 
-            // Start above the final molecular structure.
             atom.position = SCNVector3(
                 position.x,
                 position.y,
                 assemblyHeight
             )
 
-            // Hidden until the oxygen-positioning phase.
             atom.opacity = 0.0
 
             oxygenNode.addChildNode(atom)
-
             oxygenAtoms.append(atom)
         }
 
-        // ========================================================
+        // ============================================================
         // CARBON-CARBON BONDS
-        // ========================================================
+        // ============================================================
 
         let carbonBondPairs: [(Int, Int)] = [
 
@@ -1495,41 +1476,42 @@ final class QRTLSceneController:
                 color: UIColor.white
             )
 
-            // Bonds are hidden until bond alignment.
             bond.opacity = 0.0
 
             bondNode.addChildNode(bond)
-
             molecularBonds.append(bond)
         }
 
-        // ========================================================
+        // ============================================================
         // CARBON-OXYGEN BONDS
-        // ========================================================
+        // ============================================================
 
-        for index in 0..<min(
+        let oxygenBondCount = min(
             carbonPositions.count,
             oxygenPositions.count
-        ) {
+        )
 
-            let bond = makeBond(
-                from: carbonPositions[index],
-                to: oxygenPositions[index],
-                radius: 0.030,
-                color: UIColor.white
-            )
+        if oxygenBondCount > 0 {
 
-            // Bonds are hidden until bond alignment.
-            bond.opacity = 0.0
+            for index in 0..<oxygenBondCount {
 
-            bondNode.addChildNode(bond)
+                let bond = makeBond(
+                    from: carbonPositions[index],
+                    to: oxygenPositions[index],
+                    radius: 0.030,
+                    color: UIColor.white
+                )
 
-            molecularBonds.append(bond)
+                bond.opacity = 0.0
+
+                bondNode.addChildNode(bond)
+                molecularBonds.append(bond)
+            }
         }
 
-        // ========================================================
+        // ============================================================
         // MOLECULAR RING
-        // ========================================================
+        // ============================================================
 
         let ringGeometry = SCNTorus(
             ringRadius: 0.78,
@@ -1555,10 +1537,8 @@ final class QRTLSceneController:
             -0.08
         )
 
-        // Start completely hidden.
         ring.opacity = 0.0
 
-        // Start almost collapsed.
         ring.scale = SCNVector3(
             0.01,
             0.01,
@@ -1567,9 +1547,9 @@ final class QRTLSceneController:
 
         ringNode.addChildNode(ring)
 
-        // ========================================================
+        // ============================================================
         // STABILIZATION HALO
-        // ========================================================
+        // ============================================================
 
         let stabilizationGeometry = SCNTorus(
             ringRadius: 1.05,
@@ -1602,9 +1582,9 @@ final class QRTLSceneController:
             stabilizationRing
         )
 
-        // ========================================================
+        // ============================================================
         // RESET NODE OPACITIES
-        // ========================================================
+        // ============================================================
 
         carbonNode.opacity = 0.0
         hydrogenNode.opacity = 0.0
@@ -1614,9 +1594,9 @@ final class QRTLSceneController:
         stabilizationNode.opacity = 0.0
         moleculeNode.opacity = 0.0
 
-        // ========================================================
+        // ============================================================
         // RESET NODE TRANSFORMS
-        // ========================================================
+        // ============================================================
 
         carbonNode.scale = SCNVector3(
             1.0,
@@ -1654,9 +1634,9 @@ final class QRTLSceneController:
             1.0
         )
 
-        // ========================================================
-        // FINAL STATE
-        // ========================================================
+        // ============================================================
+        // FINAL INITIALIZATION STATE
+        // ============================================================
 
         glucoseCreated = false
     }
