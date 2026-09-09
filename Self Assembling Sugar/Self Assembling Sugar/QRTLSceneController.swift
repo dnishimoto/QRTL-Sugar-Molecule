@@ -1,8 +1,8 @@
 //
-//  File.swift
+//  QRTLSceneController.swift
 //  Self Assembling Sugar
 //
-//  Created by David Nishimoto on 9/9/26.
+//  Stage-by-stage QRTL Frequency Cascade visualization
 //
 
 import Foundation
@@ -10,160 +10,134 @@ import SwiftUI
 import SceneKit
 import Combine
 
-
 final class QRTLSceneController:
     NSObject,
     ObservableObject,
-    SCNSceneRendererDelegate {
+    SCNSceneRendererDelegate
+{
+    private var carbonTargetPositions: [SCNVector3] = []
+    private var hydrogenTargetPositions: [SCNVector3] = []
+    private var oxygenTargetPositions: [SCNVector3] = []
 
-    // --------------------------------------------------------
-    // Current phase
-    // --------------------------------------------------------
+    private var glucoseCreated = false
 
-    @Published var phase:
-        QRTLPhase = .initialization
-
+    @Published var phase: QRTLPhase = .spaceEnvironment
     @Published var phaseProgress: Int = 0
 
-    // --------------------------------------------------------
-    // Electrical input
-    // --------------------------------------------------------
-
-    @Published var current: Double = 0.50
-
-    @Published var currentEfficiency: Double = 0.70
-
+    @Published var current: Double = 0.05
+    @Published var currentEfficiency: Double = 0.25
     @Published var effectiveInput: Double = 0
 
-    // --------------------------------------------------------
-    // Energy shell
-    // --------------------------------------------------------
-
-    @Published var shellEnergy: Double = 0.75
-
+    @Published var shellEnergy: Double = 0.10
     @Published var shellRadius: Double = 1.65
-
     @Published var shellWidth: Double = 0.42
-
-    @Published var shellCoupling: Double = 0.80
-
-    @Published var shellCoherence: Double = 0.90
-
-    // --------------------------------------------------------
-    // QRTL pressure
-    // --------------------------------------------------------
+    @Published var shellCoupling: Double = 0.20
+    @Published var shellCoherence: Double = 0.20
 
     @Published var qrtlPressure: Double = 0
 
-    // --------------------------------------------------------
-    // Energy loss
-    // --------------------------------------------------------
-
-    @Published var energyLoss: Double = 0.08
-
+    @Published var energyLoss: Double = 0.10
     @Published var reactionEnergy: Double = 0
 
-    // --------------------------------------------------------
-    // Forces
-    // --------------------------------------------------------
-
     @Published var qrtlForce: Double = 0
-
-    @Published var externalForce: Double = 0.40
-
-    @Published var kineticForce: Double = 0.35
-
-    @Published var bondForce: Double = 0.70
-
-    // --------------------------------------------------------
-    // Playback
-    // --------------------------------------------------------
+    @Published var externalForce: Double = 0.05
+    @Published var kineticForce: Double = 0.05
+    @Published var bondForce: Double = 0.10
 
     @Published var isPlaying = false
-
     @Published var replaceStrongForce = true
 
-    // --------------------------------------------------------
-    // Model
-    // --------------------------------------------------------
+    // ============================================================
+    // MARK: - MODEL
+    // ============================================================
 
-    private var modelParameters =
-        QRTLParameters()
+    private var modelParameters = QRTLParameters()
+    private let physics = QRTLPhysicsModel()
 
-    private let physics =
-        QRTLPhysicsModel()
+    private weak var sceneView: SCNView?
+    private var scene: SCNScene!
 
-    // --------------------------------------------------------
-    // Scene
-    // --------------------------------------------------------
+    // ============================================================
+    // MARK: - WORLD NODES
+    // ============================================================
 
-    private weak var sceneView:
-        SCNView?
+    private let worldNode = SCNNode()
 
-    private var scene:
-        SCNScene!
+    private let latticeNode = SCNNode()
+    private let shellNode = SCNNode()
+    private let forceNode = SCNNode()
+    private let currentNode = SCNNode()
 
-    private let worldNode =
-        SCNNode()
+    private let nucleusNode = SCNNode()
+    private let electronNode = SCNNode()
 
-    private let latticeNode =
-        SCNNode()
+    // ============================================================
+    // MARK: - MOLECULAR NODES
+    //
+    // These are intentionally separated so the molecule is built
+    // progressively instead of appearing all at once.
+    // ============================================================
 
-    private let shellNode =
-        SCNNode()
+    private let moleculeNode = SCNNode()
 
-    private let forceNode =
-        SCNNode()
+    private let sourceNode = SCNNode()
+    private let waterNode = SCNNode()
 
-    private let currentNode =
-        SCNNode()
+    private let carbonNode = SCNNode()
+    private let hydrogenNode = SCNNode()
+    private let oxygenNode = SCNNode()
 
-    private let nucleusNode =
-        SCNNode()
+    private let bondNode = SCNNode()
+    private let ringNode = SCNNode()
 
-    private let electronNode =
-        SCNNode()
+    private let stabilizationNode = SCNNode()
 
-    private let moleculeNode =
-        SCNNode()
+    // ============================================================
+    // MARK: - MOLECULAR STATE
+    // ============================================================
 
-    private let strandNode =
-        SCNNode()
+    private var carbonAtoms: [SCNNode] = []
+    private var hydrogenAtoms: [SCNNode] = []
+    private var oxygenAtoms: [SCNNode] = []
 
-    // --------------------------------------------------------
-    // Timing
-    // --------------------------------------------------------
+    private var molecularBonds: [SCNNode] = []
 
-    private var elapsedTime:
-        TimeInterval = 0
+    // ============================================================
+    // MARK: - ANIMATION
+    // ============================================================
 
-    private var lastTime:
-        TimeInterval = 0
+    private var elapsedTime: TimeInterval = 0
+    private var lastTime: TimeInterval = 0
 
-    // --------------------------------------------------------
-    // State
-    // --------------------------------------------------------
+    private let animationSpeed: Double = 1.0
 
-    private var glucoseCreated =
-        false
+    // ============================================================
+    // MARK: - INITIALIZATION
+    // ============================================================
 
-    // ========================================================
-    // MARK: - Scene Setup
-    // ========================================================
+    override init() {
+        super.init()
+
+        phase = .spaceEnvironment
+        phaseProgress = QRTLPhase.spaceEnvironment.rawValue
+
+        configurePhase(.spaceEnvironment)
+    }
+
+    // ============================================================
+    // MARK: - SCENE SETUP
+    // ============================================================
 
     func setupScene(sceneView: SCNView) {
-        self.sceneView = sceneView
 
-        // ============================================================
-        // CREATE SCENE
-        // ============================================================
+        self.sceneView = sceneView
 
         scene = SCNScene()
 
         scene.background.contents = UIColor(
             red: 0.015,
-            green: 0.02,
-            blue: 0.04,
+            green: 0.020,
+            blue: 0.040,
             alpha: 1.0
         )
 
@@ -174,9 +148,9 @@ final class QRTLSceneController:
         sceneView.isPlaying = true
         sceneView.backgroundColor = .black
 
-        // ============================================================
-        // SCENE HIERARCHY
-        // ============================================================
+        // --------------------------------------------------------
+        // WORLD
+        // --------------------------------------------------------
 
         scene.rootNode.addChildNode(worldNode)
 
@@ -184,14 +158,24 @@ final class QRTLSceneController:
         worldNode.addChildNode(shellNode)
         worldNode.addChildNode(forceNode)
         worldNode.addChildNode(currentNode)
+
         worldNode.addChildNode(nucleusNode)
         worldNode.addChildNode(electronNode)
-        worldNode.addChildNode(moleculeNode)
-        worldNode.addChildNode(strandNode)
 
-        // ============================================================
+        worldNode.addChildNode(moleculeNode)
+
+        moleculeNode.addChildNode(sourceNode)
+        moleculeNode.addChildNode(waterNode)
+        moleculeNode.addChildNode(carbonNode)
+        moleculeNode.addChildNode(hydrogenNode)
+        moleculeNode.addChildNode(oxygenNode)
+        moleculeNode.addChildNode(bondNode)
+        moleculeNode.addChildNode(ringNode)
+        moleculeNode.addChildNode(stabilizationNode)
+
+        // --------------------------------------------------------
         // FLOOR
-        // ============================================================
+        // --------------------------------------------------------
 
         let floor = SCNFloor()
         floor.reflectivity = 0.05
@@ -206,40 +190,28 @@ final class QRTLSceneController:
         )
 
         floor.materials = [floorMaterial]
+
         worldNode.addChildNode(floorNode)
 
-        // ============================================================
+        // --------------------------------------------------------
         // CAMERA
-        // ============================================================
+        // --------------------------------------------------------
 
         let camera = SCNCamera()
-
         camera.fieldOfView = 48
         camera.zNear = 0.01
         camera.zFar = 200.0
 
         let cameraNode = SCNNode()
         cameraNode.camera = camera
-
-        cameraNode.position = SCNVector3(
-            0,
-            3,
-            11
-        )
-
-        cameraNode.look(
-            at: SCNVector3(
-                0,
-                0,
-                0
-            )
-        )
+        cameraNode.position = SCNVector3(0, 3, 11)
+        cameraNode.look(at: SCNVector3(0, 0, 0))
 
         worldNode.addChildNode(cameraNode)
 
-        // ============================================================
+        // --------------------------------------------------------
         // KEY LIGHT
-        // ============================================================
+        // --------------------------------------------------------
 
         let keyLight = SCNLight()
         keyLight.type = .omni
@@ -247,18 +219,13 @@ final class QRTLSceneController:
 
         let keyNode = SCNNode()
         keyNode.light = keyLight
-
-        keyNode.position = SCNVector3(
-            4,
-            6,
-            6
-        )
+        keyNode.position = SCNVector3(4, 6, 6)
 
         worldNode.addChildNode(keyNode)
 
-        // ============================================================
+        // --------------------------------------------------------
         // FILL LIGHT
-        // ============================================================
+        // --------------------------------------------------------
 
         let fillLight = SCNLight()
         fillLight.type = .omni
@@ -266,467 +233,1614 @@ final class QRTLSceneController:
 
         let fillNode = SCNNode()
         fillNode.light = fillLight
-
-        fillNode.position = SCNVector3(
-            -5,
-            2,
-            4
-        )
+        fillNode.position = SCNVector3(-5, 2, 4)
 
         worldNode.addChildNode(fillNode)
 
-        // ============================================================
-        // BUILD VISUALIZATION
-        // ============================================================
+        // --------------------------------------------------------
+        // BUILD STATIC VISUALIZATION COMPONENTS
+        //
+        // NOTE:
+        // There is intentionally NO buildGlucoseMolecule() here.
+        //
+        // The molecular structure is constructed progressively by
+        // updateMolecularAssembly().
+        // --------------------------------------------------------
 
         buildLattice()
+        buildEnergyShell()
+        buildNucleus()
+        buildElectrons()
+        buildForceVisualization()
+        buildCurrentVisualization()
+
+        buildSourceMaterial()
+        buildWaterMolecules()
+
+        // Start with all molecular components hidden.
+        resetMolecularAssembly()
+
+        updateForces()
+        updateSceneForCurrentPhase()
+    }
+
+    // ============================================================
+    // MARK: - 17-STAGE PHASE MODEL
+    // ============================================================
+
+    private func configurePhase(_ newPhase: QRTLPhase) {
+
+        phase = newPhase
+
+        switch newPhase {
+
+        // ========================================================
+        // 1. SPACE ENVIRONMENT
+        // ========================================================
+
+        case .spaceEnvironment:
+
+            current = 0.05
+            currentEfficiency = 0.25
+
+            shellEnergy = 0.10
+            shellRadius = 1.65
+            shellWidth = 0.42
+            shellCoupling = 0.20
+            shellCoherence = 0.20
+
+            energyLoss = 0.10
+
+            externalForce = 0.05
+            kineticForce = 0.05
+            bondForce = 0.10
+
+        // ========================================================
+        // 2. SOURCE-MATERIAL COLLECTION
+        // ========================================================
+
+        case .sourceCollection:
+
+            current = 0.15
+            currentEfficiency = 0.35
+
+            shellEnergy = 0.20
+            shellCoupling = 0.30
+            shellCoherence = 0.30
+
+            externalForce = 0.10
+            kineticForce = 0.10
+            bondForce = 0.15
+
+        // ========================================================
+        // 3. MOLECULAR SOURCE
+        // ========================================================
+
+        case .molecularSource:
+
+            current = 0.20
+            currentEfficiency = 0.40
+
+            shellEnergy = 0.30
+            shellCoupling = 0.35
+            shellCoherence = 0.40
+
+            externalForce = 0.12
+            kineticForce = 0.12
+            bondForce = 0.20
+
+        // ========================================================
+        // 4. HYDROGEN-OXYGEN EXCITATION
+        // ========================================================
+
+        case .hydrogenOxygenExcitation:
+
+            current = 0.25
+            currentEfficiency = 0.45
+
+            shellEnergy = 0.40
+            shellCoupling = 0.45
+            shellCoherence = 0.50
+
+            externalForce = 0.15
+            kineticForce = 0.15
+            bondForce = 0.25
+
+        // ========================================================
+        // 5. ANTISYMMETRIC EXCITATION
+        // ========================================================
+
+        case .antisymmetricExcitation:
+
+            current = 0.28
+            currentEfficiency = 0.48
+
+            shellEnergy = 0.45
+            shellCoupling = 0.50
+            shellCoherence = 0.55
+
+            externalForce = 0.18
+            kineticForce = 0.18
+            bondForce = 0.30
+
+        // ========================================================
+        // 6. ENERGY INJECTION
+        // ========================================================
+
+        case .energyInjection:
+
+            current = 0.40
+            currentEfficiency = 0.55
+
+            shellEnergy = 0.60
+            shellCoupling = 0.65
+            shellCoherence = 0.65
+
+            externalForce = 0.25
+            kineticForce = 0.20
+            bondForce = 0.35
+
+        // ========================================================
+        // 7. QRTL LATTICE
+        // ========================================================
+
+        case .qrtlLattice:
+
+            current = 0.45
+            currentEfficiency = 0.60
+
+            shellEnergy = 0.70
+            shellCoupling = 0.75
+            shellCoherence = 0.75
+
+            externalForce = 0.25
+            kineticForce = 0.22
+            bondForce = 0.40
+
+        // ========================================================
+        // 8. RESONANCE LOCK
+        // ========================================================
+
+        case .resonanceLock:
+
+            current = 0.50
+            currentEfficiency = 0.65
+
+            shellEnergy = 0.78
+            shellCoupling = 0.82
+            shellCoherence = 0.85
+
+            externalForce = 0.30
+            kineticForce = 0.20
+            bondForce = 0.45
+
+        // ========================================================
+        // 9. ATOMIC CAPTURE
+        // ========================================================
+
+        case .atomicCapture:
+
+            current = 0.45
+            currentEfficiency = 0.65
+
+            shellEnergy = 0.80
+            shellCoupling = 0.84
+            shellCoherence = 0.86
+
+            externalForce = 0.35
+            kineticForce = 0.25
+            bondForce = 0.50
+
+        // ========================================================
+        // 10. CARBON POSITIONING
+        // ========================================================
+
+        case .carbonPositioning:
+
+            current = 0.42
+            currentEfficiency = 0.66
+
+            shellEnergy = 0.82
+            shellCoupling = 0.85
+            shellCoherence = 0.88
+
+            externalForce = 0.30
+            kineticForce = 0.25
+            bondForce = 0.60
+
+        // ========================================================
+        // 11. HYDROGEN POSITIONING
+        // ========================================================
+
+        case .hydrogenPositioning:
+
+            current = 0.38
+            currentEfficiency = 0.67
+
+            shellEnergy = 0.83
+            shellCoupling = 0.86
+            shellCoherence = 0.89
+
+            externalForce = 0.25
+            kineticForce = 0.25
+            bondForce = 0.65
+
+        // ========================================================
+        // 12. OXYGEN POSITIONING
+        // ========================================================
+
+        case .oxygenPositioning:
+
+            current = 0.35
+            currentEfficiency = 0.68
+
+            shellEnergy = 0.84
+            shellCoupling = 0.87
+            shellCoherence = 0.90
+
+            externalForce = 0.25
+            kineticForce = 0.22
+            bondForce = 0.70
+
+        // ========================================================
+        // 13. BOND ALIGNMENT
+        // ========================================================
+
+        case .bondAlignment:
+
+            current = 0.40
+            currentEfficiency = 0.70
+
+            shellEnergy = 0.87
+            shellCoupling = 0.90
+            shellCoherence = 0.92
+
+            externalForce = 0.20
+            kineticForce = 0.20
+            bondForce = 0.82
+
+        // ========================================================
+        // 14. RING CLOSURE
+        // ========================================================
+
+        case .ringClosure:
+
+            current = 0.35
+            currentEfficiency = 0.70
+
+            shellEnergy = 0.88
+            shellCoupling = 0.91
+            shellCoherence = 0.93
+
+            externalForce = 0.18
+            kineticForce = 0.18
+            bondForce = 0.90
+
+        // ========================================================
+        // 15. GLUCOSE ASSEMBLY
+        // ========================================================
+
+        case .glucoseAssembly:
+
+            current = 0.30
+            currentEfficiency = 0.70
+
+            shellEnergy = 0.90
+            shellCoupling = 0.92
+            shellCoherence = 0.94
+
+            externalForce = 0.15
+            kineticForce = 0.15
+            bondForce = 0.95
+
+        // ========================================================
+        // 16. MOLECULAR STABILIZATION
+        // ========================================================
+
+        case .molecularStabilization:
+
+            current = 0.08
+            currentEfficiency = 0.72
+
+            shellEnergy = 0.94
+            shellCoupling = 0.94
+            shellCoherence = 0.97
+
+            energyLoss = 0.04
+
+            externalForce = 0.08
+            kineticForce = 0.08
+            bondForce = 0.98
+
+        // ========================================================
+        // 17. FINAL SUGAR
+        // ========================================================
+
+        case .finalSugar:
+
+            current = 0.02
+            currentEfficiency = 0.75
+
+            shellEnergy = 1.00
+            shellCoupling = 0.98
+            shellCoherence = 0.99
+
+            energyLoss = 0.02
+
+            externalForce = 0.03
+            kineticForce = 0.03
+            bondForce = 1.00
+        }
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    
+    func setExternalForce(_ value: Double) {
+
+        externalForce = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+
+    // ============================================================
+    // MARK: - SET KINETIC FORCE
+    // ============================================================
+
+    func setKineticForce(_ value: Double) {
+
+        kineticForce = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setShellCoherence(_ value: Double) {
+
+        shellCoherence = max(
+            0.0,
+            min(1.0, value)
+        )
 
         buildEnergyShell()
 
-        buildNucleus()
-
-        buildElectrons()
-
-        buildForceVisualization()
-
-        buildCurrentVisualization()
-
-        // ============================================================
-        // BUILD THE ACTUAL SUGAR MOLECULE
-        // ============================================================
-
-        buildGlucoseMolecule()
-
-        // ============================================================
-        // FORCE EVERYTHING VISIBLE FOR INITIAL DIAGNOSTICS
-        // ============================================================
-
-        latticeNode.opacity = 1.0
-        shellNode.opacity = 1.0
-        forceNode.opacity = 1.0
-        currentNode.opacity = 1.0
-        nucleusNode.opacity = 1.0
-        electronNode.opacity = 1.0
-        moleculeNode.opacity = 1.0
-        strandNode.opacity = 1.0
-
-        // ============================================================
-        // INITIAL PHYSICS STATE
-        // ============================================================
-
         updateForces()
-
-        // Apply the phase visibility after all geometry exists.
+        syncPublishedValues()
         updateSceneForCurrentPhase()
     }
-    private func buildGlucoseMolecule() {
-        // ============================================================
-        // CLEAR PREVIOUS MOLECULE
-        // ============================================================
 
-        moleculeNode.childNodes.forEach {
+    // ============================================================
+    // MARK: - SET ENERGY LOSS
+    // ============================================================
+
+    func setEnergyLoss(_ value: Double) {
+
+        energyLoss = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setShellCoupling(_ value: Double) {
+
+        shellCoupling = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        buildEnergyShell()
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setShellWidth(_ value: Double) {
+
+        shellWidth = max(
+            0.01,
+            value
+        )
+
+        buildEnergyShell()
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setShellRadius(_ value: Double) {
+
+        shellRadius = max(
+            0.01,
+            value
+        )
+
+        buildEnergyShell()
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setCurrentEfficiency(_ value: Double) {
+
+        currentEfficiency = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func setShellEnergy(_ value: Double) {
+
+        shellEnergy = max(
+            0.0,
+            min(1.0, value)
+        )
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func pauseSequence() {
+        isPlaying = false
+    }
+    func setCurrent(_ value: Double) {
+
+        current = max(0.0, min(1.0, value))
+
+        updateForces()
+        syncPublishedValues()
+        updateSceneForCurrentPhase()
+    }
+    func resetToFirstStep() {
+
+        isPlaying = false
+
+        elapsedTime = 0
+        lastTime = 0
+
+        goToStep(0)
+    }
+    func playSequence() {
+
+        // If the sequence is already at the final stage,
+        // start again from the beginning.
+        if phaseProgress >= QRTLPhase.allCases.count - 1 {
+            goToStep(0)
+        }
+
+        isPlaying = true
+        elapsedTime = 0
+        lastTime = 0
+    }
+
+   func goToStep(_ step: Int) {
+
+        let clampedStep = max(
+            0,
+            min(
+                step,
+                QRTLPhase.allCases.count - 1
+            )
+        )
+
+        phaseProgress = clampedStep
+
+        guard let newPhase = QRTLPhase(rawValue: clampedStep) else {
+            return
+        }
+
+        configurePhase(newPhase)
+    }
+    // ============================================================
+    // MARK: - SCENE PHASE UPDATE
+    // ============================================================
+
+    private func updateSceneForCurrentPhase() {
+
+        let currentStage = phaseProgress
+
+        // --------------------------------------------------------
+        // ENVIRONMENT
+        // --------------------------------------------------------
+
+        latticeNode.opacity =
+            currentStage >= QRTLPhase.qrtlLattice.rawValue
+            ? 1.0
+            : 0.20
+
+        shellNode.opacity =
+            currentStage >= QRTLPhase.energyInjection.rawValue
+            ? 1.0
+            : 0.20
+
+        currentNode.opacity =
+            currentStage >= QRTLPhase.spaceEnvironment.rawValue
+            ? 1.0
+            : 0.05
+
+        forceNode.opacity =
+            currentStage >= QRTLPhase.resonanceLock.rawValue
+            ? 1.0
+            : 0.15
+
+        // --------------------------------------------------------
+        // NUCLEAR / ATOMIC VISUALIZATION
+        // --------------------------------------------------------
+
+        nucleusNode.opacity =
+            currentStage >= QRTLPhase.atomicCapture.rawValue
+            ? 1.0
+            : 0.10
+
+        electronNode.opacity =
+            currentStage >= QRTLPhase.atomicCapture.rawValue
+            ? 1.0
+            : 0.10
+
+        // --------------------------------------------------------
+        // PROGRESSIVE MOLECULAR ASSEMBLY
+        // --------------------------------------------------------
+
+        updateMolecularAssembly()
+
+        // --------------------------------------------------------
+        // STABILIZATION
+        // --------------------------------------------------------
+
+        stabilizationNode.opacity =
+            currentStage >= QRTLPhase.molecularStabilization.rawValue
+            ? 1.0
+            : 0.0
+    }
+
+    // ============================================================
+    // MARK: - PROGRESSIVE MOLECULAR ASSEMBLY
+    // ============================================================
+
+    private func updateMolecularAssembly() {
+
+        let stage = phaseProgress
+
+        // ========================================================
+        // 1–3. SOURCE MATERIAL
+        // ========================================================
+
+        sourceNode.opacity =
+            stage >= QRTLPhase.sourceCollection.rawValue
+            ? 1.0
+            : 0.0
+
+        waterNode.opacity =
+            stage >= QRTLPhase.molecularSource.rawValue
+            ? 1.0
+            : 0.0
+
+        // ========================================================
+        // 4–8. EXCITATION / QRTL FIELD
+        // ========================================================
+
+        // Nothing molecular is assembled yet.
+        // The energy field is preparing the environment.
+
+        // ========================================================
+        // 9. ATOMIC CAPTURE
+        // ========================================================
+
+        moleculeNode.opacity =
+            stage >= QRTLPhase.atomicCapture.rawValue
+            ? 1.0
+            : 0.0
+
+        // ========================================================
+        // 10. CARBON POSITIONING
+        // ========================================================
+
+        if stage >= QRTLPhase.carbonPositioning.rawValue {
+
+            let carbonProgress =
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        Double(
+                            stage -
+                            QRTLPhase.carbonPositioning.rawValue
+                        ) + 1.0
+                    ) / 2.0
+                )
+
+            carbonNode.opacity = 1.0
+
+            for (index, atom) in carbonAtoms.enumerated() {
+
+                let threshold =
+                    Double(index + 1) /
+                    Double(max(carbonAtoms.count, 1))
+
+                atom.opacity =
+                    carbonProgress >= threshold
+                    ? 1.0
+                    : 0.0
+            }
+
+        } else {
+
+            carbonNode.opacity = 0.0
+        }
+
+        // ========================================================
+        // 11. HYDROGEN POSITIONING
+        // ========================================================
+
+        if stage >= QRTLPhase.hydrogenPositioning.rawValue {
+
+            hydrogenNode.opacity = 1.0
+
+            let hydrogenProgress =
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        Double(
+                            stage -
+                            QRTLPhase.hydrogenPositioning.rawValue
+                        ) + 1.0
+                    ) / 2.0
+                )
+
+            for (index, atom) in hydrogenAtoms.enumerated() {
+
+                let threshold =
+                    Double(index + 1) /
+                    Double(max(hydrogenAtoms.count, 1))
+
+                atom.opacity =
+                    hydrogenProgress >= threshold
+                    ? 1.0
+                    : 0.0
+            }
+
+        } else {
+
+            hydrogenNode.opacity = 0.0
+        }
+
+        // ========================================================
+        // 12. OXYGEN POSITIONING
+        // ========================================================
+
+        if stage >= QRTLPhase.oxygenPositioning.rawValue {
+
+            oxygenNode.opacity = 1.0
+
+            let oxygenProgress =
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        Double(
+                            stage -
+                            QRTLPhase.oxygenPositioning.rawValue
+                        ) + 1.0
+                    ) / 2.0
+                )
+
+            for (index, atom) in oxygenAtoms.enumerated() {
+
+                let threshold =
+                    Double(index + 1) /
+                    Double(max(oxygenAtoms.count, 1))
+
+                atom.opacity =
+                    oxygenProgress >= threshold
+                    ? 1.0
+                    : 0.0
+            }
+
+        } else {
+
+            oxygenNode.opacity = 0.0
+        }
+
+        // ========================================================
+        // 13. BOND ALIGNMENT
+        // ========================================================
+
+        if stage >= QRTLPhase.bondAlignment.rawValue {
+
+            bondNode.opacity = 1.0
+
+            let bondProgress =
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        Double(
+                            stage -
+                            QRTLPhase.bondAlignment.rawValue
+                        ) + 1.0
+                    ) / 2.0
+                )
+
+            for (index, bond) in molecularBonds.enumerated() {
+
+                let threshold =
+                    Double(index + 1) /
+                    Double(max(molecularBonds.count, 1))
+
+                bond.opacity =
+                    bondProgress >= threshold
+                    ? 1.0
+                    : 0.0
+            }
+
+        } else {
+
+            bondNode.opacity = 0.0
+        }
+
+        // ========================================================
+        // 14. RING CLOSURE
+        // ========================================================
+
+        ringNode.opacity =
+            stage >= QRTLPhase.ringClosure.rawValue
+            ? 1.0
+            : 0.0
+
+        // ========================================================
+        // 15. GLUCOSE ASSEMBLY
+        // ========================================================
+
+        glucoseCreated =
+            stage >= QRTLPhase.glucoseAssembly.rawValue
+
+        // ========================================================
+        // 16. MOLECULAR STABILIZATION
+        // ========================================================
+
+        stabilizationNode.opacity =
+            stage >= QRTLPhase.molecularStabilization.rawValue
+            ? 1.0
+            : 0.0
+
+        // ========================================================
+        // 17. FINAL SUGAR
+        // ========================================================
+
+        if stage >= QRTLPhase.finalSugar.rawValue {
+
+            moleculeNode.opacity = 1.0
+            carbonNode.opacity = 1.0
+            hydrogenNode.opacity = 1.0
+            oxygenNode.opacity = 1.0
+            bondNode.opacity = 1.0
+            ringNode.opacity = 1.0
+            stabilizationNode.opacity = 1.0
+
+            carbonAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            hydrogenAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            oxygenAtoms.forEach {
+                $0.opacity = 1.0
+            }
+
+            molecularBonds.forEach {
+                $0.opacity = 1.0
+            }
+        }
+    }
+
+    // ============================================================
+    // MARK: - MOLECULAR SOURCE
+    // ============================================================
+
+    private func buildSourceMaterial() {
+
+        sourceNode.childNodes.forEach {
             $0.removeFromParentNode()
         }
 
-        // ============================================================
-        // ATOM CREATION
-        // ============================================================
+        let positions: [SCNVector3] = [
+            SCNVector3(-2.8, 1.0, 0.0),
+            SCNVector3(-3.2, 0.4, 0.2),
+            SCNVector3(-2.7, 0.0, -0.2),
+            SCNVector3(2.8, 1.0, 0.0),
+            SCNVector3(3.1, 0.3, 0.2),
+            SCNVector3(2.7, -0.3, -0.2)
+        ]
 
-        func addAtom(
-            position: SCNVector3,
-            radius: CGFloat,
-            color: UIColor,
-            emission: UIColor? = nil
-        ) {
-            let sphere = SCNSphere(radius: radius)
-            sphere.segmentCount = 24
+        for position in positions {
+
+            let sphere = SCNSphere(radius: 0.10)
 
             let material = SCNMaterial()
-            material.diffuse.contents = color
-
-            if let emission {
-                material.emission.contents = emission
-            }
+            material.diffuse.contents = UIColor.white
+            material.emission.contents = UIColor.white
 
             sphere.materials = [material]
 
             let node = SCNNode(geometry: sphere)
             node.position = position
 
-            moleculeNode.addChildNode(node)
+            sourceNode.addChildNode(node)
+        }
+    }
+
+    // ============================================================
+    // MARK: - WATER MOLECULES
+    // ============================================================
+
+    private func buildWaterMolecules() {
+
+        waterNode.childNodes.forEach {
+            $0.removeFromParentNode()
         }
 
-        // ============================================================
-        // BOND CREATION
-        // ============================================================
-
-        func addBond(
-            from start: SCNVector3,
-            to end: SCNVector3,
-            radius: CGFloat = 0.025,
-            color: UIColor = .white
-        ) {
-            let direction = end - start
-            let length = CGFloat(direction.length())
-
-            guard length > 0.001 else {
-                return
-            }
-
-            let cylinder = SCNCylinder(
-                radius: radius,
-                height: length
-            )
-
-            let material = SCNMaterial()
-            material.diffuse.contents = color
-            cylinder.materials = [material]
-
-            let node = SCNNode(geometry: cylinder)
-
-            node.position = (start + end) * 0.5
-
-            let defaultAxis = SCNVector3(
-                0,
-                1,
-                0
-            )
-
-            let targetAxis = direction.normalized()
-
-            let rotationAxis = defaultAxis.cross(targetAxis)
-
-            let dot = max(
-                -1.0,
-                min(
-                    1.0,
-                    defaultAxis.dot(targetAxis)
-                )
-            )
-
-            if rotationAxis.length() > 0.001 {
-                let angle = acos(dot)
-                let axis = rotationAxis.normalized()
-
-                node.rotation = SCNVector4(
-                    axis.x,
-                    axis.y,
-                    axis.z,
-                    angle
-                )
-            } else if dot < 0 {
-                node.rotation = SCNVector4(
-                    1,
-                    0,
-                    0,
-                    Float.pi
-                )
-            }
-
-            moleculeNode.addChildNode(node)
-        }
-
-        // ============================================================
-        // GLUCOSE-LIKE RING
-        //
-        // Six-membered ring:
-        // C1 - C2 - C3 - C4 - C5 - O - C1
-        // ============================================================
-
-        let c1 = SCNVector3(-0.90,  0.00, 0.00)
-        let c2 = SCNVector3(-0.45,  0.62, 0.00)
-        let c3 = SCNVector3( 0.35,  0.62, 0.00)
-        let c4 = SCNVector3( 0.85,  0.05, 0.00)
-        let c5 = SCNVector3( 0.35, -0.60, 0.00)
-        let o5 = SCNVector3(-0.45, -0.50, 0.00)
-
-        // ============================================================
-        // RING ATOMS
-        // ============================================================
-
-        // Carbon
-        addAtom(
-            position: c1,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        addAtom(
-            position: c2,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        addAtom(
-            position: c3,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        addAtom(
-            position: c4,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        addAtom(
-            position: c5,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        // Ring oxygen
-        addAtom(
-            position: o5,
-            radius: 0.15,
-            color: UIColor(
-                red: 0.85,
-                green: 0.10,
-                blue: 0.10,
-                alpha: 1
-            ),
-            emission: UIColor(
-                red: 0.35,
-                green: 0.02,
-                blue: 0.02,
-                alpha: 1
-            )
-        )
-
-        // ============================================================
-        // RING BONDS
-        // ============================================================
-
-        let carbonColor = UIColor(
-            white: 0.65,
-            alpha: 1
-        )
-
-        addBond(from: c1, to: c2, color: carbonColor)
-        addBond(from: c2, to: c3, color: carbonColor)
-        addBond(from: c3, to: c4, color: carbonColor)
-        addBond(from: c4, to: c5, color: carbonColor)
-        addBond(from: c5, to: o5, color: carbonColor)
-        addBond(from: o5, to: c1, color: carbonColor)
-
-        // ============================================================
-        // EXOCYCLIC CARBON
-        // ============================================================
-
-        let c6 = SCNVector3(
-            1.15,
-            0.70,
-            0.15
-        )
-
-        addAtom(
-            position: c6,
-            radius: 0.13,
-            color: UIColor(
-                white: 0.12,
-                alpha: 1
-            )
-        )
-
-        addBond(
-            from: c5,
-            to: c6,
-            color: carbonColor
-        )
-
-        // ============================================================
-        // HYDROXYL OXYGENS
-        // ============================================================
-
-        let o1 = SCNVector3(-1.30,  0.45, 0.12)
-        let o2 = SCNVector3(-0.65,  1.05, 0.12)
-        let o3 = SCNVector3( 0.45,  1.05, 0.12)
-        let o4 = SCNVector3( 1.25,  0.05, 0.12)
-        let o6 = SCNVector3( 1.60,  0.95, 0.20)
-
-        let oxygenColor = UIColor(
-            red: 0.85,
-            green: 0.10,
-            blue: 0.10,
-            alpha: 1
-        )
-
-        let oxygenEmission = UIColor(
-            red: 0.35,
-            green: 0.02,
-            blue: 0.02,
-            alpha: 1
-        )
-
-        addAtom(
-            position: o1,
-            radius: 0.12,
-            color: oxygenColor,
-            emission: oxygenEmission
-        )
-
-        addAtom(
-            position: o2,
-            radius: 0.12,
-            color: oxygenColor,
-            emission: oxygenEmission
-        )
-
-        addAtom(
-            position: o3,
-            radius: 0.12,
-            color: oxygenColor,
-            emission: oxygenEmission
-        )
-
-        addAtom(
-            position: o4,
-            radius: 0.12,
-            color: oxygenColor,
-            emission: oxygenEmission
-        )
-
-        addAtom(
-            position: o6,
-            radius: 0.12,
-            color: oxygenColor,
-            emission: oxygenEmission
-        )
-
-        // ============================================================
-        // OXYGEN BONDS
-        // ============================================================
-
-        addBond(from: c1, to: o1, color: carbonColor)
-        addBond(from: c2, to: o2, color: carbonColor)
-        addBond(from: c3, to: o3, color: carbonColor)
-        addBond(from: c4, to: o4, color: carbonColor)
-        addBond(from: c6, to: o6, color: carbonColor)
-
-        // ============================================================
-        // HYDROGENS
-        // ============================================================
-
-        let hydrogenColor = UIColor(
-            white: 0.92,
-            alpha: 1
-        )
-
-        let hydrogenRadius: CGFloat = 0.055
-
-        let hydrogens: [SCNVector3] = [
-            SCNVector3(-1.05, -0.35,  0.12),
-            SCNVector3(-0.65,  0.45,  0.18),
-            SCNVector3( 0.05,  0.90,  0.18),
-            SCNVector3( 0.65,  0.45,  0.18),
-            SCNVector3( 0.10, -0.95,  0.18),
-            SCNVector3( 0.55, -0.55,  0.18),
-            SCNVector3( 1.05, -0.20,  0.18),
-            SCNVector3( 1.45,  0.25,  0.25),
-            SCNVector3( 1.95,  0.90,  0.25),
-            SCNVector3( 1.55,  1.45,  0.25),
-            SCNVector3( 1.95,  1.15, -0.25),
-            SCNVector3(-1.55,  0.65,  0.20)
+        let centers: [SCNVector3] = [
+            SCNVector3(-1.8, 1.2, 0.0),
+            SCNVector3(1.8, 1.0, 0.2),
+            SCNVector3(-1.6, -1.0, -0.2),
+            SCNVector3(1.6, -1.1, 0.1)
         ]
 
-        for hydrogen in hydrogens {
-            addAtom(
-                position: hydrogen,
-                radius: hydrogenRadius,
-                color: hydrogenColor
+        for center in centers {
+
+            let oxygen = makeAtom(
+                radius: 0.18,
+                color: UIColor.red
+            )
+
+            oxygen.position = center
+
+            waterNode.addChildNode(oxygen)
+
+            let h1 = makeAtom(
+                radius: 0.10,
+                color: UIColor.white
+            )
+
+            let h2 = makeAtom(
+                radius: 0.10,
+                color: UIColor.white
+            )
+
+            h1.position = SCNVector3(
+                center.x - 0.24,
+                center.y + 0.16,
+                center.z
+            )
+
+            h2.position = SCNVector3(
+                center.x + 0.24,
+                center.y + 0.16,
+                center.z
+            )
+
+            waterNode.addChildNode(h1)
+            waterNode.addChildNode(h2)
+
+            waterNode.addChildNode(
+                makeBond(
+                    from: h1.position,
+                    to: oxygen.position,
+                    radius: 0.025,
+                    color: UIColor.white
+                )
+            )
+
+            waterNode.addChildNode(
+                makeBond(
+                    from: h2.position,
+                    to: oxygen.position,
+                    radius: 0.025,
+                    color: UIColor.white
+                )
             )
         }
+    }
 
-        // ============================================================
-        // MOLECULE SCALE / POSITION
-        // ============================================================
+    // ============================================================
+    // MARK: - BUILD PROGRESSIVE GLUCOSE
+    // ============================================================
 
-        moleculeNode.position = SCNVector3(
-            0,
-            0,
-            0
+    // ============================================================
+    // MARK: - BUILD PROGRESSIVE GLUCOSE
+    // ============================================================
+
+    private func buildProgressiveGlucose() {
+
+        // ========================================================
+        // CLEAR PREVIOUS MOLECULAR GEOMETRY
+        // ========================================================
+
+        carbonNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        hydrogenNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        oxygenNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        bondNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        ringNode.childNodes.forEach {
+            $0.removeFromParentNode()
+        }
+
+        // ========================================================
+        // CLEAR ARRAYS
+        // ========================================================
+
+        carbonAtoms.removeAll()
+        hydrogenAtoms.removeAll()
+        oxygenAtoms.removeAll()
+        molecularBonds.removeAll()
+
+        carbonTargetPositions.removeAll()
+        hydrogenTargetPositions.removeAll()
+        oxygenTargetPositions.removeAll()
+
+        glucoseCreated = false
+
+        // ========================================================
+        // CARBON TARGET POSITIONS
+        // ========================================================
+
+        let carbonPositions: [SCNVector3] = [
+
+            SCNVector3(
+                -0.90,
+                 0.00,
+                 0.00
+            ),
+
+            SCNVector3(
+                -0.45,
+                 0.62,
+                 0.00
+            ),
+
+            SCNVector3(
+                 0.35,
+                 0.62,
+                 0.00
+            ),
+
+            SCNVector3(
+                 0.85,
+                 0.05,
+                 0.00
+            ),
+
+            SCNVector3(
+                 0.35,
+                -0.60,
+                 0.00
+            ),
+
+            SCNVector3(
+                -0.45,
+                -0.50,
+                 0.00
+            )
+        ]
+
+        // ========================================================
+        // HYDROGEN TARGET POSITIONS
+        // ========================================================
+
+        let hydrogenPositions: [SCNVector3] = [
+
+            SCNVector3(
+                -1.18,
+                 0.05,
+                 0.10
+            ),
+
+            SCNVector3(
+                -0.72,
+                 0.88,
+                 0.10
+            ),
+
+            SCNVector3(
+                -0.30,
+                 0.88,
+                -0.10
+            ),
+
+            SCNVector3(
+                 0.45,
+                 0.90,
+                 0.10
+            ),
+
+            SCNVector3(
+                 1.12,
+                 0.12,
+                 0.10
+            ),
+
+            SCNVector3(
+                 0.62,
+                -0.86,
+                 0.10
+            ),
+
+            SCNVector3(
+                 0.05,
+                -0.86,
+                -0.10
+            ),
+
+            SCNVector3(
+                -0.72,
+                -0.78,
+                 0.10
+            ),
+
+            SCNVector3(
+                -1.10,
+                -0.20,
+                -0.10
+            ),
+
+            SCNVector3(
+                -0.30,
+                 0.30,
+                 0.18
+            ),
+
+            SCNVector3(
+                 0.72,
+                 0.38,
+                -0.18
+            ),
+
+            SCNVector3(
+                 0.02,
+                -0.20,
+                 0.18
+            )
+        ]
+
+        // ========================================================
+        // OXYGEN TARGET POSITIONS
+        // ========================================================
+
+        let oxygenPositions: [SCNVector3] = [
+
+            SCNVector3(
+                -1.28,
+                 0.55,
+                 0.00
+            ),
+
+            SCNVector3(
+                -0.05,
+                 1.10,
+                 0.00
+            ),
+
+            SCNVector3(
+                 1.20,
+                 0.48,
+                 0.00
+            ),
+
+            SCNVector3(
+                 0.82,
+                -0.72,
+                 0.00
+            ),
+
+            SCNVector3(
+                -0.05,
+                -1.12,
+                 0.00
+            ),
+
+            SCNVector3(
+                -1.28,
+                -0.45,
+                 0.00
+            )
+        ]
+
+        // ========================================================
+        // STORE TARGET POSITIONS
+        // ========================================================
+
+        carbonTargetPositions = carbonPositions
+        hydrogenTargetPositions = hydrogenPositions
+        oxygenTargetPositions = oxygenPositions
+
+        // ========================================================
+        // ASSEMBLY SOURCE HEIGHT
+        // ========================================================
+        //
+        // All atoms begin above their final molecular positions.
+        // Their X/Y coordinates are already aligned with their
+        // eventual positions. The assembly animation will lower
+        // them into the molecular structure.
+        //
+        // ========================================================
+
+        let assemblyHeight: Float = 2.0
+
+        // ========================================================
+        // CARBON
+        // ========================================================
+
+        for position in carbonPositions {
+
+            let atom = makeAtom(
+                radius: 0.18,
+                color: UIColor.black
+            )
+
+            // Start above the final molecular structure.
+            atom.position = SCNVector3(
+                position.x,
+                position.y,
+                assemblyHeight
+            )
+
+            // Hidden until the carbon-positioning phase.
+            atom.opacity = 0.0
+
+            carbonNode.addChildNode(atom)
+
+            carbonAtoms.append(atom)
+        }
+
+        // ========================================================
+        // HYDROGEN
+        // ========================================================
+
+        for position in hydrogenPositions {
+
+            let atom = makeAtom(
+                radius: 0.09,
+                color: UIColor.white
+            )
+
+            // Start above the final molecular structure.
+            atom.position = SCNVector3(
+                position.x,
+                position.y,
+                assemblyHeight
+            )
+
+            // Hidden until the hydrogen-positioning phase.
+            atom.opacity = 0.0
+
+            hydrogenNode.addChildNode(atom)
+
+            hydrogenAtoms.append(atom)
+        }
+
+        // ========================================================
+        // OXYGEN
+        // ========================================================
+
+        for position in oxygenPositions {
+
+            let atom = makeAtom(
+                radius: 0.15,
+                color: UIColor.red
+            )
+
+            // Start above the final molecular structure.
+            atom.position = SCNVector3(
+                position.x,
+                position.y,
+                assemblyHeight
+            )
+
+            // Hidden until the oxygen-positioning phase.
+            atom.opacity = 0.0
+
+            oxygenNode.addChildNode(atom)
+
+            oxygenAtoms.append(atom)
+        }
+
+        // ========================================================
+        // CARBON-CARBON BONDS
+        // ========================================================
+
+        let carbonBondPairs: [(Int, Int)] = [
+
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 0)
+        ]
+
+        for (first, second) in carbonBondPairs {
+
+            let bond = makeBond(
+                from: carbonPositions[first],
+                to: carbonPositions[second],
+                radius: 0.035,
+                color: UIColor.white
+            )
+
+            // Bonds are hidden until bond alignment.
+            bond.opacity = 0.0
+
+            bondNode.addChildNode(bond)
+
+            molecularBonds.append(bond)
+        }
+
+        // ========================================================
+        // CARBON-OXYGEN BONDS
+        // ========================================================
+
+        for index in 0..<min(
+            carbonPositions.count,
+            oxygenPositions.count
+        ) {
+
+            let bond = makeBond(
+                from: carbonPositions[index],
+                to: oxygenPositions[index],
+                radius: 0.030,
+                color: UIColor.white
+            )
+
+            // Bonds are hidden until bond alignment.
+            bond.opacity = 0.0
+
+            bondNode.addChildNode(bond)
+
+            molecularBonds.append(bond)
+        }
+
+        // ========================================================
+        // MOLECULAR RING
+        // ========================================================
+
+        let ringGeometry = SCNTorus(
+            ringRadius: 0.78,
+            pipeRadius: 0.025
         )
 
-        moleculeNode.scale = SCNVector3(
+        let ringMaterial = SCNMaterial()
+
+        ringMaterial.diffuse.contents = UIColor.cyan
+        ringMaterial.emission.contents = UIColor.cyan
+
+        ringGeometry.materials = [
+            ringMaterial
+        ]
+
+        let ring = SCNNode(
+            geometry: ringGeometry
+        )
+
+        ring.position = SCNVector3(
+            -0.02,
+             0.02,
+            -0.08
+        )
+
+        // Start completely hidden.
+        ring.opacity = 0.0
+
+        // Start almost collapsed.
+        ring.scale = SCNVector3(
+            0.01,
+            0.01,
+            0.01
+        )
+
+        ringNode.addChildNode(ring)
+
+        // ========================================================
+        // STABILIZATION HALO
+        // ========================================================
+
+        let stabilizationGeometry = SCNTorus(
+            ringRadius: 1.05,
+            pipeRadius: 0.018
+        )
+
+        let stabilizationMaterial = SCNMaterial()
+
+        stabilizationMaterial.diffuse.contents = UIColor.cyan
+        stabilizationMaterial.emission.contents = UIColor.cyan
+        stabilizationMaterial.transparency = 0.55
+
+        stabilizationGeometry.materials = [
+            stabilizationMaterial
+        ]
+
+        let stabilizationRing = SCNNode(
+            geometry: stabilizationGeometry
+        )
+
+        stabilizationRing.position = SCNVector3(
+            -0.02,
+             0.02,
+            -0.10
+        )
+
+        stabilizationRing.opacity = 0.0
+
+        stabilizationNode.addChildNode(
+            stabilizationRing
+        )
+
+        // ========================================================
+        // RESET NODE OPACITIES
+        // ========================================================
+
+        carbonNode.opacity = 0.0
+        hydrogenNode.opacity = 0.0
+        oxygenNode.opacity = 0.0
+        bondNode.opacity = 0.0
+        ringNode.opacity = 0.0
+        stabilizationNode.opacity = 0.0
+        moleculeNode.opacity = 0.0
+
+        // ========================================================
+        // RESET NODE TRANSFORMS
+        // ========================================================
+
+        carbonNode.scale = SCNVector3(
             1.0,
             1.0,
             1.0
         )
 
-        moleculeNode.opacity = 1.0
+        hydrogenNode.scale = SCNVector3(
+            1.0,
+            1.0,
+            1.0
+        )
 
-        glucoseCreated = true
+        oxygenNode.scale = SCNVector3(
+            1.0,
+            1.0,
+            1.0
+        )
+
+        bondNode.scale = SCNVector3(
+            1.0,
+            1.0,
+            1.0
+        )
+
+        ringNode.scale = SCNVector3(
+            0.01,
+            0.01,
+            0.01
+        )
+
+        stabilizationNode.scale = SCNVector3(
+            1.0,
+            1.0,
+            1.0
+        )
+
+        // ========================================================
+        // FINAL STATE
+        // ========================================================
+
+        glucoseCreated = false
     }
-    // ========================================================
-    // MARK: - Lattice
-    // ========================================================
+    // ============================================================
+    // MARK: - RESET MOLECULAR ASSEMBLY
+    // ============================================================
+
+    private func resetMolecularAssembly() {
+
+        sourceNode.opacity = 0.0
+        waterNode.opacity = 0.0
+
+        carbonNode.opacity = 0.0
+        hydrogenNode.opacity = 0.0
+        oxygenNode.opacity = 0.0
+
+        bondNode.opacity = 0.0
+        ringNode.opacity = 0.0
+        stabilizationNode.opacity = 0.0
+
+        moleculeNode.opacity = 0.0
+
+        glucoseCreated = false
+
+        // Build the molecular components but do NOT display them.
+        buildProgressiveGlucose()
+    }
+
+    // ============================================================
+    // MARK: - ATOM CREATION
+    // ============================================================
+
+    private func makeAtom(
+        radius: CGFloat,
+        color: UIColor
+    ) -> SCNNode {
+
+        let geometry = SCNSphere(radius: radius)
+
+        let material = SCNMaterial()
+        material.diffuse.contents = color
+        material.specular.contents = UIColor.white
+
+        if color == UIColor.red {
+            material.emission.contents = UIColor.red
+        }
+
+        geometry.materials = [material]
+
+        return SCNNode(geometry: geometry)
+    }
+
+    // ============================================================
+    // MARK: - BOND CREATION
+    // ============================================================
+
+    private func makeBond(
+        from: SCNVector3,
+        to: SCNVector3,
+        radius: CGFloat,
+        color: UIColor
+    ) -> SCNNode {
+
+        let direction = to - from
+        let length = CGFloat(
+            sqrt(
+                direction.x * direction.x +
+                direction.y * direction.y +
+                direction.z * direction.z
+            )
+        )
+
+        let cylinder = SCNCylinder(
+            radius: radius,
+            height: length
+        )
+
+        let material = SCNMaterial()
+        material.diffuse.contents = color
+        material.specular.contents = UIColor.white
+
+        cylinder.materials = [material]
+
+        let node = SCNNode(geometry: cylinder)
+
+        node.position = SCNVector3(
+            (from.x + to.x) * 0.5,
+            (from.y + to.y) * 0.5,
+            (from.z + to.z) * 0.5
+        )
+
+        let up = SCNVector3(0, 1, 0)
+
+        let normalized = SCNVector3(
+            direction.x / Float(length),
+            direction.y / Float(length),
+            direction.z / Float(length)
+        )
+
+        let dot = up.x * normalized.x +
+                  up.y * normalized.y +
+                  up.z * normalized.z
+
+        let axis = SCNVector3(
+            up.y * normalized.z - up.z * normalized.y,
+            up.z * normalized.x - up.x * normalized.z,
+            up.x * normalized.y - up.y * normalized.x
+        )
+
+        let axisLength = sqrt(
+            axis.x * axis.x +
+            axis.y * axis.y +
+            axis.z * axis.z
+        )
+
+        if axisLength > 0.0001 {
+
+            let normalizedAxis = SCNVector3(
+                axis.x / axisLength,
+                axis.y / axisLength,
+                axis.z / axisLength
+            )
+
+            node.rotation = SCNVector4(
+                normalizedAxis.x,
+                normalizedAxis.y,
+                normalizedAxis.z,
+                acos(max(-1.0, min(1.0, dot)))
+            )
+
+        } else if dot < 0 {
+
+            node.rotation = SCNVector4(
+                1,
+                0,
+                0,
+                Float.pi
+            )
+        }
+
+        return node
+    }
+
+    // ============================================================
+    // MARK: - LATTICE
+    // ============================================================
 
     private func buildLattice() {
+
         latticeNode.childNodes.forEach {
             $0.removeFromParentNode()
         }
 
         let spacing: Float = 0.65
-        let count = 5
 
-        for x in 0..<count {
-            for y in 0..<count {
-                for z in 0..<count {
+        for x in -2...2 {
+            for y in -2...2 {
+                for z in -2...2 {
 
-                    let sphere = SCNSphere(
-                        radius: 0.055
-                    )
+                    let sphere = SCNSphere(radius: 0.045)
 
                     let material = SCNMaterial()
+                    material.diffuse.contents = UIColor.cyan
+                    material.emission.contents = UIColor.cyan
 
-                    // Cyan lattice material
-                    material.diffuse.contents = UIColor(
-                        red: 0.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 0.65
-                    )
+                    sphere.materials = [material]
 
-                    sphere.materials = [
-                        material
-                    ]
-
-                    let node = SCNNode(
-                        geometry: sphere
-                    )
+                    let node = SCNNode(geometry: sphere)
 
                     node.position = SCNVector3(
-                        Float(x - 2) * spacing,
-                        Float(y - 2) * spacing,
-                        Float(z - 2) * spacing
+                        Float(x) * spacing,
+                        Float(y) * spacing,
+                        Float(z) * spacing
                     )
 
-                    latticeNode.addChildNode(
-                        node
-                    )
+                    latticeNode.addChildNode(node)
                 }
             }
         }
     }
 
-    // ========================================================
-    // MARK: - Energy Shell
-    // ========================================================
+    // ============================================================
+    // MARK: - ENERGY SHELL
+    // ============================================================
 
     private func buildEnergyShell() {
 
@@ -734,114 +1848,31 @@ final class QRTLSceneController:
             $0.removeFromParentNode()
         }
 
-        let radius = CGFloat(
-            max(
-                modelParameters.shellRadius,
-                0.05
-            )
-        )
-
-        // ========================================================
-        // ENERGY SHELL
-        // ========================================================
-
         let sphere = SCNSphere(
-            radius: radius
+            radius: CGFloat(shellRadius)
         )
-
-        sphere.segmentCount = 64
 
         let material = SCNMaterial()
 
-        // Cyan
-        material.diffuse.contents = UIColor(
-            red: 0.0,
-            green: 1.0,
-            blue: 1.0,
-            alpha: 0.06
-        )
-
-        material.emission.contents = UIColor(
-            red: 0.0,
-            green: 1.0,
-            blue: 1.0,
-            alpha: 0.18
-        )
-
-        material.transparency = 0.18
+        material.diffuse.contents = UIColor.cyan
+        material.emission.contents = UIColor.cyan
+        material.transparency = 0.08
         material.isDoubleSided = true
 
-        sphere.materials = [
-            material
-        ]
+        sphere.materials = [material]
 
-        let node = SCNNode(
+        let shell = SCNNode(
             geometry: sphere
         )
 
-        shellNode.addChildNode(
-            node
-        )
+        shellNode.addChildNode(shell)
 
-        // ========================================================
-        // SHELL RINGS
-        // ========================================================
-
-        let ringRadii: [CGFloat] = [
-            radius * 0.76,
-            radius,
-            radius * 1.24
-        ]
-
-        for ringRadius in ringRadii {
-
-            let torus = SCNTorus(
-                ringRadius: ringRadius,
-                pipeRadius: 0.012
-            )
-
-            let ringMaterial = SCNMaterial()
-
-            // Cyan
-            ringMaterial.diffuse.contents = UIColor(
-                red: 0.0,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 0.42
-            )
-
-            ringMaterial.emission.contents = UIColor(
-                red: 0.0,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 0.25
-            )
-
-            torus.materials = [
-                ringMaterial
-            ]
-
-            let ringNode = SCNNode(
-                geometry: torus
-            )
-
-            shellNode.addChildNode(
-                ringNode
-            )
-        }
-
-        // ========================================================
-        // SHELL COHERENCE
-        // ========================================================
-
-        shellNode.opacity = CGFloat(
-            0.45 +
-            modelParameters.shellCoherence * 0.55
-        )
+        // ...
     }
-    // ========================================================
-    // MARK: - Nucleus
-    // ========================================================
+
+    // ============================================================
+    // MARK: - NUCLEUS
+    // ============================================================
 
     private func buildNucleus() {
 
@@ -849,94 +1880,44 @@ final class QRTLSceneController:
             $0.removeFromParentNode()
         }
 
-        let positions: [
-            SCNVector3
-        ] = [
+        let positions: [SCNVector3] = [
 
-            SCNVector3(
-                -0.18,
-                0,
-                0
-            ),
-
-            SCNVector3(
-                0.18,
-                0,
-                0
-            ),
-
-            SCNVector3(
-                0,
-                0.18,
-                0
-            ),
-
-            SCNVector3(
-                0,
-                -0.18,
-                0
-            ),
-
-            SCNVector3(
-                0,
-                0,
-                0.18
-            ),
-
-            SCNVector3(
-                0,
-                0,
-                -0.18
-            )
+            SCNVector3(0.18, 0, 0),
+            SCNVector3(-0.18, 0, 0),
+            SCNVector3(0, 0.18, 0),
+            SCNVector3(0, -0.18, 0),
+            SCNVector3(0, 0, 0.18),
+            SCNVector3(0, 0, -0.18)
         ]
 
         for index in 0..<positions.count {
 
-            let sphere = SCNSphere(
-                radius: 0.13
-            )
+            let sphere = SCNSphere(radius: 0.13)
 
             let material = SCNMaterial()
 
-            if index < 3 {
-
-                material.diffuse.contents = UIColor(
-                    red: 1,
-                    green: 0.25,
-                    blue: 0.25,
-                    alpha: 1
-                )
-
-            } else {
-
-                material.diffuse.contents = UIColor(
+            material.diffuse.contents =
+                index < 3
+                ? UIColor.red
+                : UIColor(
                     red: 0.65,
                     green: 0.75,
-                    blue: 1,
-                    alpha: 1
+                    blue: 1.0,
+                    alpha: 1.0
                 )
-            }
 
-            sphere.materials = [
-                material
-            ]
+            sphere.materials = [material]
 
-            let node = SCNNode(
-                geometry: sphere
-            )
+            let node = SCNNode(geometry: sphere)
+            node.position = positions[index]
 
-            node.position =
-                positions[index]
-
-            nucleusNode.addChildNode(
-                node
-            )
+            nucleusNode.addChildNode(node)
         }
     }
 
-    // ========================================================
-    // MARK: - Electrons
-    // ========================================================
+    // ============================================================
+    // MARK: - ELECTRONS
+    // ============================================================
 
     private func buildElectrons() {
 
@@ -944,69 +1925,35 @@ final class QRTLSceneController:
             $0.removeFromParentNode()
         }
 
-        let electronCount = 8
-
-        for index in 0..<electronCount {
-
-            let electron = SCNSphere(
-                radius: 0.035
-            )
-
-            let material = SCNMaterial()
-
-            // ====================================================
-            // YELLOW ELECTRON
-            // ====================================================
-
-            material.diffuse.contents = UIColor(
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 1.0
-            )
-
-            material.emission.contents = UIColor(
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 0.35
-            )
-
-            electron.materials = [
-                material
-            ]
-
-            let node = SCNNode(
-                geometry: electron
-            )
-
-            // ====================================================
-            // ELECTRON ORBIT POSITION
-            // ====================================================
+        for index in 0..<8 {
 
             let angle =
-                Float(index) /
-                Float(electronCount) *
-                Float.pi *
-                2.0
+                Float(index) *
+                Float.pi * 2.0 / 8.0
 
-            let radius: Float = 0.48
+            let sphere = SCNSphere(radius: 0.045)
+
+            let material = SCNMaterial()
+            material.diffuse.contents = UIColor.yellow
+            material.emission.contents = UIColor.yellow
+
+            sphere.materials = [material]
+
+            let node = SCNNode(geometry: sphere)
 
             node.position = SCNVector3(
-                cos(angle) * radius,
-                sin(angle) * radius,
-                0.0
+                cos(angle) * 0.48,
+                sin(angle) * 0.48,
+                0
             )
 
-            electronNode.addChildNode(
-                node
-            )
+            electronNode.addChildNode(node)
         }
     }
 
-    // ========================================================
-    // MARK: - Current Visualization
-    // ========================================================
+    // ============================================================
+    // MARK: - CURRENT
+    // ============================================================
 
     private func buildCurrentVisualization() {
 
@@ -1016,57 +1963,29 @@ final class QRTLSceneController:
 
         for index in 0..<7 {
 
-            let particle = SCNSphere(
-                radius: 0.045
-            )
+            let sphere = SCNSphere(radius: 0.045)
 
             let material = SCNMaterial()
+            material.diffuse.contents = UIColor.yellow
+            material.emission.contents = UIColor.yellow
 
-            // ====================================================
-            // YELLOW CURRENT PARTICLE
-            // ====================================================
+            sphere.materials = [material]
 
-            material.diffuse.contents = UIColor(
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 1.0
-            )
-
-            material.emission.contents = UIColor(
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 0.65
-            )
-
-            particle.materials = [
-                material
-            ]
-
-            let node = SCNNode(
-                geometry: particle
-            )
-
-            // ====================================================
-            // CURRENT PARTICLE POSITION
-            // ====================================================
+            let node = SCNNode(geometry: sphere)
 
             node.position = SCNVector3(
-                Float(index) * 0.28 - 0.84,
+                Float(index) * 0.55 - 1.65,
                 1.15,
-                0.0
+                0
             )
 
-            currentNode.addChildNode(
-                node
-            )
+            currentNode.addChildNode(node)
         }
     }
 
-    // ========================================================
-    // MARK: - Force Visualization
-    // ========================================================
+    // ============================================================
+    // MARK: - FORCE VISUALIZATION
+    // ============================================================
 
     private func buildForceVisualization() {
 
@@ -1074,1333 +1993,204 @@ final class QRTLSceneController:
             $0.removeFromParentNode()
         }
 
-        addArrow(
-            name: "QRTL",
-            start: SCNVector3(
-                -1.8,
-                0,
-                0
-            ),
-            end: SCNVector3(
-                -0.8,
-                0,
-                0
-            )
-        )
+        let arrows: [
+            (SCNVector3, SCNVector3)
+        ] = [
 
-        addArrow(
-            name: "EXTERNAL",
-            start: SCNVector3(
-                1.8,
-                0,
-                0
+            (
+                SCNVector3(0, 0, 0),
+                SCNVector3(0, 1.0, 0)
             ),
-            end: SCNVector3(
-                0.8,
-                0,
-                0
-            )
-        )
 
-        addArrow(
-            name: "MOTION",
-            start: SCNVector3(
-                0,
-                -1.4,
-                0
+            (
+                SCNVector3(0, 0, 0),
+                SCNVector3(1.0, 0.2, 0)
             ),
-            end: SCNVector3(
-                0,
-                -0.6,
-                0
-            )
-        )
 
-        addArrow(
-            name: "BOND",
-            start: SCNVector3(
-                0,
-                1.4,
-                0
+            (
+                SCNVector3(0, 0, 0),
+                SCNVector3(-0.8, 0.3, 0)
             ),
-            end: SCNVector3(
-                0,
-                0.6,
-                0
+
+            (
+                SCNVector3(0, 0, 0),
+                SCNVector3(0, -0.8, 0)
             )
-        )
+        ]
+
+        for (from, to) in arrows {
+
+            forceNode.addChildNode(
+                addArrow(
+                    from: from,
+                    to: to
+                )
+            )
+        }
     }
 
+    // ============================================================
+    // MARK: - ARROW
+    // ============================================================
+
     private func addArrow(
-        name: String,
-        start: SCNVector3,
-        end: SCNVector3
-    ) {
+        from: SCNVector3,
+        to: SCNVector3
+    ) -> SCNNode {
 
-        let direction = end - start
+        let direction = to - from
 
-        let length = CGFloat(
-            direction.length()
+        let length = sqrt(
+            direction.x * direction.x +
+            direction.y * direction.y +
+            direction.z * direction.z
         )
 
-        guard length > 0.001 else {
-            return
-        }
-
-        // ========================================================
-        // ARROW SHAFT
-        // ========================================================
-
-        let cylinder = SCNCylinder(
+        let shaft = SCNCylinder(
             radius: 0.025,
-            height: length
+            height: CGFloat(length * 0.75)
         )
 
         let material = SCNMaterial()
+        material.diffuse.contents = UIColor.cyan
+        material.emission.contents = UIColor.cyan
 
-        // ========================================================
-        // FORCE COLOR
-        // ========================================================
+        shaft.materials = [material]
 
-        switch name {
+        let node = SCNNode(geometry: shaft)
 
-        case "QRTL":
-
-            material.diffuse.contents = UIColor(
-                red: 0.0,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 1.0
-            )
-
-        case "EXTERNAL":
-
-            material.diffuse.contents = UIColor(
-                red: 1.0,
-                green: 0.3,
-                blue: 0.3,
-                alpha: 1.0
-            )
-
-        case "MOTION":
-
-            material.diffuse.contents = UIColor(
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 1.0
-            )
-
-        default:
-
-            material.diffuse.contents = UIColor.white
-        }
-
-        cylinder.materials = [
-            material
-        ]
-
-        let node = SCNNode(
-            geometry: cylinder
+        node.position = SCNVector3(
+            (from.x + to.x) * 0.5,
+            (from.y + to.y) * 0.5,
+            (from.z + to.z) * 0.5
         )
 
-        // ========================================================
-        // CENTER ARROW BETWEEN START AND END
-        // ========================================================
-
-        node.position =
-            (start + end) * 0.5
-
-        // ========================================================
-        // ROTATE CYLINDER
-        // SCNCylinder'S DEFAULT AXIS IS +Y
-        // ========================================================
-
-        let defaultAxis = SCNVector3(
-            0.0,
-            1.0,
-            0.0
-        )
-
-        let targetAxis =
-            direction.normalized()
-
-        let rotationAxis =
-            defaultAxis.cross(
-                targetAxis
-            )
-
-        let dot = max(
-            -1.0,
-            min(
-                1.0,
-                defaultAxis.dot(
-                    targetAxis
-                )
-            )
-        )
-
-        if rotationAxis.length() > 0.001 {
-
-            let angle = acos(dot)
-
-            let axis = rotationAxis.normalized()
-
-            node.rotation = SCNVector4(
-                axis.x,
-                axis.y,
-                axis.z,
-                angle
-            )
-
-        } else if dot < 0.0 {
-
-            // ====================================================
-            // 180-DEGREE CASE
-            // DEFAULT +Y IS POINTING OPPOSITE TARGET
-            // ====================================================
-
-            node.rotation = SCNVector4(
-                1.0,
-                0.0,
-                0.0,
-                Float.pi
-            )
-        }
-
-        forceNode.addChildNode(
-            node
-        )
+        return node
     }
-    // ========================================================
-    // MARK: - UPDATE PHYSICS
-    // ========================================================
 
-    func updateForces() {
+    // ============================================================
+    // MARK: - PHYSICS
+    // ============================================================
 
-        physics.parameters =
-            modelParameters
+    private func updateForces() {
 
-        effectiveInput =
-            physics.currentPower()
+        let input = current * currentEfficiency
+
+        effectiveInput = input
 
         qrtlPressure =
-            physics.qrtlPressureIndex()
-
-        reactionEnergy =
-            physics.reactionEnergyIndex()
+            shellEnergy *
+            shellCoupling *
+            shellCoherence
 
         qrtlForce =
-            abs(
-                physics.qrtlForce(
-                    distance:
-                        modelParameters.shellRadius
-                )
-            )
+            qrtlPressure *
+            max(bondForce, 0.001)
+
+        reactionEnergy =
+            effectiveInput *
+            (1.0 - energyLoss)
 
         syncPublishedValues()
     }
 
-    // ========================================================
-    // MARK: - CONFIGURE PHASE
-    // ========================================================
-
-    private func configurePhase(
-        _ newPhase: QRTLPhase
-    ) {
-
-        phase =
-            newPhase
-
-        switch newPhase {
-
-        case .initialization:
-
-            modelParameters.current =
-                0.05
-
-            modelParameters.currentEfficiency =
-                0.25
-
-            modelParameters.shellEnergy =
-                0.10
-
-            modelParameters.shellRadius =
-                1.65
-
-            modelParameters.shellWidth =
-                0.42
-
-            modelParameters.shellCoupling =
-                0.20
-
-            modelParameters.shellCoherence =
-                0.20
-
-            modelParameters.energyLoss =
-                0.10
-
-            modelParameters.externalForce =
-                0.05
-
-            modelParameters.kineticForce =
-                0.05
-
-            modelParameters.bondStrength =
-                0.10
-
-        case .lattice:
-
-            modelParameters.current =
-                0.15
-
-            modelParameters.currentEfficiency =
-                0.35
-
-            modelParameters.shellEnergy =
-                0.25
-
-            modelParameters.shellCoupling =
-                0.30
-
-            modelParameters.shellCoherence =
-                0.35
-
-            modelParameters.externalForce =
-                0.10
-
-            modelParameters.kineticForce =
-                0.10
-
-            modelParameters.bondStrength =
-                0.20
-
-        case .proton:
-
-            modelParameters.current =
-                0.25
-
-            modelParameters.currentEfficiency =
-                0.45
-
-            modelParameters.shellEnergy =
-                0.40
-
-            modelParameters.shellCoupling =
-                0.40
-
-            modelParameters.shellCoherence =
-                0.45
-
-            modelParameters.externalForce =
-                0.15
-
-            modelParameters.kineticForce =
-                0.15
-
-            modelParameters.bondStrength =
-                0.30
-
-        case .neutron:
-
-            modelParameters.current =
-                0.28
-
-            modelParameters.currentEfficiency =
-                0.45
-
-            modelParameters.shellEnergy =
-                0.45
-
-            modelParameters.shellCoupling =
-                0.45
-
-            modelParameters.shellCoherence =
-                0.50
-
-            modelParameters.externalForce =
-                0.15
-
-            modelParameters.kineticForce =
-                0.15
-
-            modelParameters.bondStrength =
-                0.35
-
-        case .nucleus:
-
-            modelParameters.current =
-                0.35
-
-            modelParameters.currentEfficiency =
-                0.50
-
-            modelParameters.shellEnergy =
-                0.55
-
-            modelParameters.shellCoupling =
-                0.55
-
-            modelParameters.shellCoherence =
-                0.60
-
-            modelParameters.externalForce =
-                0.20
-
-            modelParameters.kineticForce =
-                0.20
-
-            modelParameters.bondStrength =
-                0.45
-
-        case .energyShell:
-
-            modelParameters.current =
-                0.30
-
-            modelParameters.currentEfficiency =
-                0.60
-
-            modelParameters.shellEnergy =
-                0.75
-
-            modelParameters.shellCoupling =
-                0.80
-
-            modelParameters.shellCoherence =
-                0.75
-
-            modelParameters.externalForce =
-                0.20
-
-            modelParameters.kineticForce =
-                0.20
-
-            modelParameters.bondStrength =
-                0.50
-
-        case .current:
-
-            modelParameters.current =
-                0.90
-
-            modelParameters.currentEfficiency =
-                0.70
-
-            modelParameters.shellEnergy =
-                1.00
-
-            modelParameters.shellCoupling =
-                0.85
-
-            modelParameters.shellCoherence =
-                0.85
-
-            modelParameters.energyLoss =
-                0.08
-
-            modelParameters.externalForce =
-                0.20
-
-            modelParameters.kineticForce =
-                0.25
-
-            modelParameters.bondStrength =
-                0.55
-
-        case .atom:
-
-            modelParameters.current =
-                0.25
-
-            modelParameters.currentEfficiency =
-                0.65
-
-            modelParameters.shellEnergy =
-                0.80
-
-            modelParameters.shellCoupling =
-                0.80
-
-            modelParameters.shellCoherence =
-                0.82
-
-            modelParameters.externalForce =
-                0.25
-
-            modelParameters.kineticForce =
-                0.25
-
-            modelParameters.bondStrength =
-                0.60
-
-        case .alignment:
-
-            modelParameters.current =
-                0.40
-
-            modelParameters.currentEfficiency =
-                0.65
-
-            modelParameters.shellEnergy =
-                0.75
-
-            modelParameters.shellCoupling =
-                0.85
-
-            modelParameters.shellCoherence =
-                0.85
-
-            modelParameters.externalForce =
-                0.60
-
-            modelParameters.kineticForce =
-                0.45
-
-            modelParameters.bondStrength =
-                0.65
-
-        case .bond:
-
-            modelParameters.current =
-                0.55
-
-            modelParameters.currentEfficiency =
-                0.70
-
-            modelParameters.shellEnergy =
-                0.90
-
-            modelParameters.shellCoupling =
-                0.90
-
-            modelParameters.shellCoherence =
-                0.88
-
-            modelParameters.externalForce =
-                0.35
-
-            modelParameters.kineticForce =
-                0.30
-
-            modelParameters.bondStrength =
-                0.90
-
-        case .carbonSkeleton:
-
-            modelParameters.current =
-                0.45
-
-            modelParameters.currentEfficiency =
-                0.68
-
-            modelParameters.shellEnergy =
-                0.82
-
-            modelParameters.shellCoupling =
-                0.85
-
-            modelParameters.shellCoherence =
-                0.88
-
-            modelParameters.externalForce =
-                0.30
-
-            modelParameters.kineticForce =
-                0.30
-
-            modelParameters.bondStrength =
-                0.75
-
-        case .glucose:
-
-            modelParameters.current =
-                0.30
-
-            modelParameters.currentEfficiency =
-                0.70
-
-            modelParameters.shellEnergy =
-                0.85
-
-            modelParameters.shellCoupling =
-                0.90
-
-            modelParameters.shellCoherence =
-                0.90
-
-            modelParameters.externalForce =
-                0.25
-
-            modelParameters.kineticForce =
-                0.25
-
-            modelParameters.bondStrength =
-                0.80
-
-        case .glucoseStabilization:
-
-            modelParameters.current =
-                0.05
-
-            modelParameters.currentEfficiency =
-                0.70
-
-            modelParameters.shellEnergy =
-                0.90
-
-            modelParameters.shellCoupling =
-                0.90
-
-            modelParameters.shellCoherence =
-                0.94
-
-            modelParameters.energyLoss =
-                0.04
-
-            modelParameters.externalForce =
-                0.15
-
-            modelParameters.kineticForce =
-                0.15
-
-            modelParameters.bondStrength =
-                0.85
-
-        case .glucosePair:
-
-            modelParameters.current =
-                0.20
-
-            modelParameters.currentEfficiency =
-                0.68
-
-            modelParameters.shellEnergy =
-                0.75
-
-            modelParameters.shellCoupling =
-                0.88
-
-            modelParameters.shellCoherence =
-                0.90
-
-            modelParameters.externalForce =
-                0.30
-
-            modelParameters.kineticForce =
-                0.25
-
-            modelParameters.bondStrength =
-                0.85
-
-        case .strandBond:
-
-            modelParameters.current =
-                0.35
-
-            modelParameters.currentEfficiency =
-                0.70
-
-            modelParameters.shellEnergy =
-                0.90
-
-            modelParameters.shellCoupling =
-                0.92
-
-            modelParameters.shellCoherence =
-                0.94
-
-            modelParameters.externalForce =
-                0.20
-
-            modelParameters.kineticForce =
-                0.20
-
-            modelParameters.bondStrength =
-                1.00
-
-        case .strandGrowth:
-
-            modelParameters.current =
-                0.30
-
-            modelParameters.currentEfficiency =
-                0.72
-
-            modelParameters.shellEnergy =
-                0.92
-
-            modelParameters.shellCoupling =
-                0.94
-
-            modelParameters.shellCoherence =
-                0.95
-
-            modelParameters.externalForce =
-                0.20
-
-            modelParameters.kineticForce =
-                0.20
-
-            modelParameters.bondStrength =
-                0.95
-
-        case .finalLock:
-
-            modelParameters.current =
-                0.02
-
-            modelParameters.currentEfficiency =
-                0.75
-
-            modelParameters.shellEnergy =
-                1.00
-
-            modelParameters.shellCoupling =
-                0.98
-
-            modelParameters.shellCoherence =
-                0.98
-
-            modelParameters.energyLoss =
-                0.02
-
-            modelParameters.externalForce =
-                0.05
-
-            modelParameters.kineticForce =
-                0.05
-
-            modelParameters.bondStrength =
-                1.00
-        }
-
-        updateForces()
-
-        syncPublishedValues()
-
-        updateSceneForCurrentPhase()
-    }
-
-    // ========================================================
-    // MARK: - SYNCHRONIZE PUBLISHED VALUES
-    // ========================================================
+    // ============================================================
+    // MARK: - SYNCHRONIZE
+    // ============================================================
 
     private func syncPublishedValues() {
 
-        current =
-            modelParameters.current
-
-        currentEfficiency =
-            modelParameters.currentEfficiency
-
-        shellEnergy =
-            modelParameters.shellEnergy
-
-        shellRadius =
-            modelParameters.shellRadius
-
-        shellWidth =
-            modelParameters.shellWidth
-
-        shellCoupling =
-            modelParameters.shellCoupling
-
-        shellCoherence =
-            modelParameters.shellCoherence
-
-        energyLoss =
-            modelParameters.energyLoss
-
-        externalForce =
-            modelParameters.externalForce
-
-        kineticForce =
-            modelParameters.kineticForce
-
-        bondForce =
-            modelParameters.bondStrength
-
         effectiveInput =
-            physics.currentPower()
+            current *
+            currentEfficiency
 
         qrtlPressure =
-            physics.qrtlPressureIndex()
+            shellEnergy *
+            shellCoupling *
+            shellCoherence
 
         reactionEnergy =
-            physics.reactionEnergyIndex()
+            effectiveInput *
+            (1.0 - energyLoss)
 
         qrtlForce =
-            abs(
-                physics.qrtlForce(
-                    distance:
-                        modelParameters.shellRadius
-                )
-            )
+            qrtlPressure *
+            max(bondForce, 0.001)
 
         buildEnergyShell()
     }
 
-    // ========================================================
-    // MARK: - USER VARIABLE CONTROLS
-    // ========================================================
-
-    func setCurrent(
-        _ value: Double
-    ) {
-
-        modelParameters.current =
-            value
-
-        updateForces()
-    }
-
-    func setCurrentEfficiency(
-        _ value: Double
-    ) {
-
-        modelParameters.currentEfficiency =
-            value
-
-        updateForces()
-    }
-
-    func setShellEnergy(
-        _ value: Double
-    ) {
-
-        modelParameters.shellEnergy =
-            value
-
-        updateForces()
-    }
-
-    func setShellRadius(
-        _ value: Double
-    ) {
-
-        modelParameters.shellRadius =
-            value
-
-        updateForces()
-    }
-
-    func setShellWidth(
-        _ value: Double
-    ) {
-
-        modelParameters.shellWidth =
-            value
-
-        updateForces()
-    }
-
-    func setShellCoupling(
-        _ value: Double
-    ) {
-
-        modelParameters.shellCoupling =
-            value
-
-        updateForces()
-    }
-
-    func setShellCoherence(
-        _ value: Double
-    ) {
-
-        modelParameters.shellCoherence =
-            value
-
-        updateForces()
-    }
-
-    func setEnergyLoss(
-        _ value: Double
-    ) {
-
-        modelParameters.energyLoss =
-            value
-
-        updateForces()
-    }
-
-    func setExternalForce(
-        _ value: Double
-    ) {
-
-        modelParameters.externalForce =
-            value
-
-        updateForces()
-    }
-
-    func setKineticForce(
-        _ value: Double
-    ) {
-
-        modelParameters.kineticForce =
-            value
-
-        updateForces()
-    }
-
-    // ========================================================
-    // MARK: - SEQUENCE CONTROL
-    // ========================================================
-
-    func goToStep(
-        _ step: Int
-    ) {
-
-        let maximum =
-            QRTLPhase.allCases.count - 1
-
-        let clampedStep =
-            min(
-                max(
-                    step,
-                    0
-                ),
-                maximum
-            )
-
-        phaseProgress =
-            clampedStep
-
-        configurePhase(
-            QRTLPhase.allCases[
-                clampedStep
-            ]
-        )
-    }
-
-    // ========================================================
-    // MARK: - NEXT
-    // ========================================================
+    // ============================================================
+    // MARK: - NEXT STEP
+    // ============================================================
 
     func nextStep() {
 
-        let next =
+        let nextRawValue =
             min(
                 phaseProgress + 1,
                 QRTLPhase.allCases.count - 1
             )
 
-        goToStep(
-            next
-        )
+        phaseProgress = nextRawValue
+
+        guard let nextPhase =
+                QRTLPhase(rawValue: nextRawValue)
+        else {
+            return
+        }
+
+        configurePhase(nextPhase)
     }
 
-    // ========================================================
-    // MARK: - PREVIOUS
-    // ========================================================
+    // ============================================================
+    // MARK: - PREVIOUS STEP
+    // ============================================================
 
     func previousStep() {
 
-        let previous =
+        let previousRawValue =
             max(
                 phaseProgress - 1,
                 0
             )
 
-        goToStep(
-            previous
-        )
+        phaseProgress = previousRawValue
+
+        guard let previousPhase =
+                QRTLPhase(rawValue: previousRawValue)
+        else {
+            return
+        }
+
+        configurePhase(previousPhase)
     }
 
-    // ========================================================
+    // ============================================================
     // MARK: - RESET
-    // ========================================================
-
-    func resetToFirstStep() {
-
-        isPlaying =
-            false
-
-        glucoseCreated =
-            false
-
-        elapsedTime =
-            0
-
-        lastTime =
-            0
-
-        goToStep(
-            0
-        )
-    }
-
-    // ========================================================
-    // MARK: - PLAY
-    // ========================================================
-
-    func playSequence() {
-
-        if phaseProgress >=
-            QRTLPhase.allCases.count - 1 {
-
-            phaseProgress =
-                0
-
-            configurePhase(
-                .initialization
-            )
-        }
-
-        isPlaying =
-            true
-
-        elapsedTime =
-            0
-
-        lastTime =
-            0
-    }
-
-    // ========================================================
-    // MARK: - PAUSE
-    // ========================================================
-
-    func pauseSequence() {
-
-        isPlaying =
-            false
-    }
-
-    // ========================================================
-    // MARK: - LEGACY PLAY
-    // ========================================================
-
-    func play() {
-
-        resetToFirstStep()
-
-        playSequence()
-    }
-
-    // ========================================================
-    // MARK: - LEGACY PAUSE
-    // ========================================================
-
-    func pause() {
-
-        pauseSequence()
-    }
-
-    // ========================================================
-    // MARK: - SCENE PHASE UPDATE
-    // ========================================================
-
-    private func updateSceneForCurrentPhase() {
-
-        let progress =
-            Double(
-                phaseProgress
-            ) /
-            Double(
-                max(
-                    QRTLPhase.allCases.count - 1,
-                    1
-                )
-            )
-
-        // ----------------------------------------------------
-        // Lattice
-        // ----------------------------------------------------
-
-        latticeNode.opacity =
-            CGFloat(
-                min(
-                    1.0,
-                    progress * 3.0 + 0.15
-                )
-            )
-
-        // ----------------------------------------------------
-        // Nucleus
-        // ----------------------------------------------------
-
-        nucleusNode.opacity =
-            phaseProgress >=
-            QRTLPhase.nucleus.rawValue
-            ? 1.0
-            : 0.15
-
-        // ----------------------------------------------------
-        // Electrons
-        // ----------------------------------------------------
-
-        electronNode.opacity =
-            phaseProgress >=
-            QRTLPhase.atom.rawValue
-            ? 1.0
-            : 0.10
-
-        // ----------------------------------------------------
-        // Current
-        // ----------------------------------------------------
-
-        currentNode.opacity =
-            phaseProgress >=
-            QRTLPhase.current.rawValue
-            ? 1.0
-            : 0.08
-
-        // ----------------------------------------------------
-        // Force visualization
-        // ----------------------------------------------------
-
-        forceNode.opacity =
-            phaseProgress >=
-            QRTLPhase.alignment.rawValue
-            ? 1.0
-            : 0.20
-
-        // ----------------------------------------------------
-        // Molecules
-        // ----------------------------------------------------
-
-        moleculeNode.opacity =
-            phaseProgress >=
-            QRTLPhase.carbonSkeleton.rawValue
-            ? 1.0
-            : 0.05
-
-        // ----------------------------------------------------
-        // Strand
-        // ----------------------------------------------------
-
-        strandNode.opacity =
-            phaseProgress >=
-            QRTLPhase.strandBond.rawValue
-            ? 1.0
-            : 0.05
-    }
-
-    // ========================================================
-    // MARK: - ANIMATION
-    // ========================================================
-
-    func renderer(
-        _ renderer: SCNSceneRenderer,
-        updateAtTime time: TimeInterval
-    ) {
-
-        if lastTime == 0 {
-
-            lastTime =
-                time
-
-            return
-        }
-
-        let delta =
-            time -
-            lastTime
-
-        lastTime =
-            time
-
-        elapsedTime +=
-            delta
-
-        // ----------------------------------------------------
-        // Continuous visual animation
-        // ----------------------------------------------------
-
-        animateCurrentPhase(
-            time: time
-        )
-
-        guard isPlaying else {
-            return
-        }
-
-        let stepDuration =
-            2.5 /
-            max(
-                modelParameters.animationSpeed,
-                0.1
-            )
-
-        if elapsedTime >=
-            stepDuration {
-
-            elapsedTime =
-                0
-
-            if phaseProgress <
-                QRTLPhase.allCases.count - 1 {
-
-                DispatchQueue.main.async {
-                    [weak self] in
-
-                    self?.nextStep()
-                }
-
-            } else {
-
-                DispatchQueue.main.async {
-                    [weak self] in
-
-                    self?.isPlaying =
-                        false
-                }
-            }
-        }
-    }
-
-    // ========================================================
-    // MARK: - PHASE ANIMATION
-    // ========================================================
-
-    private func animateCurrentPhase(
-        time: TimeInterval
-    ) {
-
-        // ----------------------------------------------------
-        // Energy shell rotation
-        // ----------------------------------------------------
-
-        shellNode.eulerAngles.y =
-            Float(
-                time *
-                0.18
-            )
-
-        shellNode.eulerAngles.x =
-            Float(
-                sin(time * 0.25) *
-                0.08
-            )
-
-        // ----------------------------------------------------
-        // Electrons
-        // ----------------------------------------------------
-
-        let electronSpeed =
-            0.75
-
-        for (
-            index,
-            node
-        ) in electronNode.childNodes.enumerated() {
-
-            let angle =
-                Float(
-                    time *
-                    electronSpeed
-                ) +
-                Float(index) *
-                0.785
-
-            let radius:
-                Float = 0.48
-
-            node.position =
-                SCNVector3(
-                    cos(angle) *
-                        radius,
-
-                    sin(angle) *
-                        radius,
-
-                    sin(
-                        angle *
-                        0.7
-                    ) *
-                    0.16
-                )
-        }
-
-        // ----------------------------------------------------
-        // Current particles
-        // ----------------------------------------------------
-
-        for (
-            index,
-            node
-        ) in currentNode.childNodes.enumerated() {
-
-            let offset =
-                Float(index) *
-                0.5
-
-            let x =
-                Float(
-                    sin(
-                        time *
-                        2.0 +
-                        Double(offset)
-                    )
-                ) *
-                0.12
-
-            node.position.x =
-                Float(index) *
-                0.28 -
-                0.84 +
-                x
-        }
-
-        // ----------------------------------------------------
-        // Nucleus movement
-        // ----------------------------------------------------
-
-        let nucleusScale =
-            1.0 +
-            Float(
-                sin(
-                    time *
-                    1.5
-                )
-            ) *
-            0.025
-
-        nucleusNode.scale =
-            SCNVector3(
-                nucleusScale,
-                nucleusScale,
-                nucleusScale
-            )
-    }
-
-    // ========================================================
-    // MARK: - RESET SCENE
-    // ========================================================
+    // ============================================================
 
     func resetScene() {
 
-        phaseProgress = 0
-        phase = .initialization
+        phaseProgress =
+            QRTLPhase.spaceEnvironment.rawValue
+
+        phase = .spaceEnvironment
+
         isPlaying = false
-        glucoseCreated = false
 
         elapsedTime = 0
         lastTime = 0
 
         modelParameters = QRTLParameters()
 
-        // Clear CONTENT, not the container nodes.
-        moleculeNode.childNodes.forEach {
-            $0.removeFromParentNode()
-        }
+        carbonAtoms.removeAll()
+        hydrogenAtoms.removeAll()
+        oxygenAtoms.removeAll()
+        molecularBonds.removeAll()
 
-        nucleusNode.childNodes.forEach {
-            $0.removeFromParentNode()
-        }
+        glucoseCreated = false
 
-        electronNode.childNodes.forEach {
-            $0.removeFromParentNode()
-        }
-
-        strandNode.childNodes.forEach {
-            $0.removeFromParentNode()
-        }
-
-        // Rebuild the visual elements.
         buildLattice()
         buildEnergyShell()
         buildNucleus()
@@ -2408,19 +2198,283 @@ final class QRTLSceneController:
         buildForceVisualization()
         buildCurrentVisualization()
 
-        // Make everything visible after reset.
+        buildSourceMaterial()
+        buildWaterMolecules()
+        resetMolecularAssembly()
+
         latticeNode.opacity = 1.0
         shellNode.opacity = 1.0
         nucleusNode.opacity = 1.0
         electronNode.opacity = 1.0
         currentNode.opacity = 1.0
         forceNode.opacity = 1.0
-        moleculeNode.opacity = 1.0
-        strandNode.opacity = 1.0
 
         updateForces()
         updateSceneForCurrentPhase()
     }
 
+    // ============================================================
+    // MARK: - PLAY / PAUSE
+    // ============================================================
 
+    func togglePlayback() {
+
+        isPlaying.toggle()
+
+        if isPlaying {
+            lastTime = 0
+        }
+    }
+
+    // ============================================================
+    // MARK: - SCENE RENDERER
+    // ============================================================
+
+    func renderer(
+        _ renderer: SCNSceneRenderer,
+        updateAtTime time: TimeInterval
+    ) {
+
+        if lastTime == 0 {
+            lastTime = time
+        }
+
+        let deltaTime =
+            min(
+                time - lastTime,
+                0.1
+            )
+
+        lastTime = time
+
+        elapsedTime += deltaTime
+
+        // --------------------------------------------------------
+        // Continuous molecular animation
+        // --------------------------------------------------------
+
+        animateMolecularState(
+            time: elapsedTime
+        )
+
+        // --------------------------------------------------------
+        // Continuous energy/current animation
+        // --------------------------------------------------------
+
+        animateEnergyState(
+            time: elapsedTime
+        )
+
+        // --------------------------------------------------------
+        // Advance through stages
+        // --------------------------------------------------------
+
+        guard isPlaying else {
+            return
+        }
+
+        let stageDuration =
+            2.5 /
+            max(animationSpeed, 0.01)
+
+        if elapsedTime >= stageDuration {
+
+            elapsedTime = 0
+
+            if phaseProgress <
+                QRTLPhase.allCases.count - 1 {
+
+                nextStep()
+
+            } else {
+
+                isPlaying = false
+            }
+        }
+    }
+
+    // ============================================================
+    // MARK: - MOLECULAR ANIMATION
+    // ============================================================
+
+    private func animateMolecularState(
+        time: TimeInterval
+    ) {
+
+        let stage = phaseProgress
+
+        // --------------------------------------------------------
+        // Water excitation
+        // --------------------------------------------------------
+
+        if stage >= QRTLPhase.hydrogenOxygenExcitation.rawValue {
+
+            let amount =
+                Float(
+                    1.0 +
+                    sin(time * 6.0) * 0.10
+                )
+
+            waterNode.scale = SCNVector3(
+                amount,
+                amount,
+                amount
+            )
+        }
+
+        // --------------------------------------------------------
+        // Antisymmetric excitation
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.antisymmetricExcitation.rawValue {
+
+            for (index, node)
+                in waterNode.childNodes.enumerated() {
+
+                let direction: Float =
+                    index % 2 == 0
+                    ? 1.0
+                    : -1.0
+
+                node.position.x +=
+                    sin(Float(time * 8.0)) *
+                    0.012 *
+                    direction
+            }
+        }
+
+        // --------------------------------------------------------
+        // Carbon positioning
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.carbonPositioning.rawValue {
+
+            let pulse =
+                1.0 +
+                Float(
+                    sin(time * 3.0) * 0.025
+                )
+
+            carbonNode.scale = SCNVector3(
+                pulse,
+                pulse,
+                pulse
+            )
+        }
+
+        // --------------------------------------------------------
+        // Hydrogen positioning
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.hydrogenPositioning.rawValue {
+
+            hydrogenNode.rotation = SCNVector4(
+                0,
+                1,
+                0,
+                Float(
+                    sin(time * 0.8) * 0.025
+                )
+            )
+        }
+
+        // --------------------------------------------------------
+        // Oxygen positioning
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.oxygenPositioning.rawValue {
+
+            oxygenNode.scale = SCNVector3(
+                1.0 +
+                    Float(sin(time * 4.0) * 0.035),
+                1.0 +
+                    Float(sin(time * 4.0) * 0.035),
+                1.0 +
+                    Float(sin(time * 4.0) * 0.035)
+            )
+        }
+
+        // --------------------------------------------------------
+        // Bond alignment
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.bondAlignment.rawValue {
+
+            let pulse =
+                1.0 +
+                Float(
+                    sin(time * 5.0) * 0.04
+                )
+
+            bondNode.scale = SCNVector3(
+                pulse,
+                pulse,
+                pulse
+            )
+        }
+
+        // --------------------------------------------------------
+        // Ring closure
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.ringClosure.rawValue {
+
+            ringNode.rotation = SCNVector4(
+                0,
+                1,
+                0,
+                Float(time * 0.5)
+            )
+        }
+
+        // --------------------------------------------------------
+        // Final stabilization
+        // --------------------------------------------------------
+
+        if stage >=
+            QRTLPhase.molecularStabilization.rawValue {
+
+            let pulse =
+                1.0 +
+                Float(
+                    sin(time * 2.0) * 0.015
+                )
+
+            moleculeNode.scale = SCNVector3(
+                pulse,
+                pulse,
+                pulse
+            )
+        }
+    }
+
+    // ============================================================
+    // MARK: - ENERGY ANIMATION
+    // ============================================================
+
+    private func animateEnergyState(
+        time: TimeInterval
+    ) {
+
+        let pulse =
+            1.0 +
+            Float(
+                sin(time * 2.0) * 0.05
+            )
+
+        shellNode.scale = SCNVector3(
+            pulse,
+            pulse,
+            pulse
+        )
+
+        currentNode.position.x =
+            sin(Float(time * 2.0)) * 0.05
+    }
 }

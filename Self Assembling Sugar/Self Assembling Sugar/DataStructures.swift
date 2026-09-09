@@ -13,201 +13,221 @@ import Foundation
 
 enum QRTLPhase: Int, CaseIterable, Identifiable {
 
-    case initialization
-    case lattice
-    case proton
-    case neutron
-    case nucleus
-    case energyShell
-    case current
-    case atom
-    case alignment
-    case bond
-    case carbonSkeleton
-    case glucose
-    case glucoseStabilization
-    case glucosePair
-    case strandBond
-    case strandGrowth
-    case finalLock
+    // ========================================================
+    // MARK: QRTL Formation Pipeline
+    // ========================================================
+
+    case spaceEnvironment = 0
+    case sourceCollection = 1
+    case molecularSource = 2
+    case hydrogenOxygenExcitation = 3
+    case antisymmetricExcitation = 4
+    case energyInjection = 5
+    case qrtlLattice = 6
+    case resonanceLock = 7
+    case atomicCapture = 8
+
+    // ========================================================
+    // MARK: Molecular Assembly
+    // ========================================================
+
+    case carbonPositioning = 9
+    case hydrogenPositioning = 10
+    case oxygenPositioning = 11
+    case bondAlignment = 12
+    case ringClosure = 13
+    case glucoseAssembly = 14
+    case molecularStabilization = 15
+    case finalSugar = 16
+
+    // ========================================================
+    // MARK: Identifiable
+    // ========================================================
 
     var id: Int {
         rawValue
     }
 
+    // ========================================================
+    // MARK: Title
+    // ========================================================
+
     var title: String {
 
         switch self {
 
-        case .initialization:
-            return "QRTL FIELD INITIALIZATION"
+        case .spaceEnvironment:
+            return "SPACE ENVIRONMENT"
 
-        case .lattice:
+        case .sourceCollection:
+            return "SOURCE MATERIAL COLLECTION"
+
+        case .molecularSource:
+            return "MOLECULAR SOURCE"
+
+        case .hydrogenOxygenExcitation:
+            return "HYDROGEN–OXYGEN EXCITATION"
+
+        case .antisymmetricExcitation:
+            return "ANTISYMMETRIC EXCITATION"
+
+        case .energyInjection:
+            return "ENERGY INJECTION"
+
+        case .qrtlLattice:
             return "QRTL LATTICE FORMATION"
 
-        case .proton:
-            return "PROTON FORMATION"
+        case .resonanceLock:
+            return "QRTL RESONANCE LOCK"
 
-        case .neutron:
-            return "NEUTRON FORMATION"
+        case .atomicCapture:
+            return "ATOMIC CAPTURE"
 
-        case .nucleus:
-            return "NUCLEAR ASSEMBLY"
+        case .carbonPositioning:
+            return "CARBON POSITIONING"
 
-        case .energyShell:
-            return "ENERGY SHELL FORMATION"
+        case .hydrogenPositioning:
+            return "HYDROGEN POSITIONING"
 
-        case .current:
-            return "CURRENT → QRTL ENERGY"
+        case .oxygenPositioning:
+            return "OXYGEN POSITIONING"
 
-        case .atom:
-            return "ATOM ASSEMBLY"
+        case .bondAlignment:
+            return "BOND ALIGNMENT"
 
-        case .alignment:
-            return "MOLECULAR ALIGNMENT"
+        case .ringClosure:
+            return "RING CLOSURE"
 
-        case .bond:
-            return "BOND STABILIZATION"
+        case .glucoseAssembly:
+            return "C₆H₁₂O₆ ASSEMBLY"
 
-        case .carbonSkeleton:
-            return "CARBON SKELETON"
+        case .molecularStabilization:
+            return "MOLECULAR STABILIZATION"
 
-        case .glucose:
-            return "GLUCOSE FORMATION"
-
-        case .glucoseStabilization:
-            return "GLUCOSE ENERGY STABILIZATION"
-
-        case .glucosePair:
-            return "GLUCOSE–GLUCOSE ALIGNMENT"
-
-        case .strandBond:
-            return "GLUCOSE BOND"
-
-        case .strandGrowth:
-            return "STRAND GROWTH"
-
-        case .finalLock:
-            return "FINAL QRTL ENERGY LOCK"
+        case .finalSugar:
+            return "FINAL SUGAR"
         }
     }
+
+    // ========================================================
+    // MARK: Explanation
+    // ========================================================
 
     var explanation: String {
 
         switch self {
 
-        case .initialization:
-            return "The QRTL field is initialized and the modeled environment is prepared."
+        case .spaceEnvironment:
+            return "The modeled space environment is established as the starting condition for the QRTL simulation."
 
-        case .lattice:
-            return "A spatial lattice is established to provide the modeled environment."
+        case .sourceCollection:
+            return "Modeled source material is collected from the surrounding environment and directed toward the assembly region."
 
-        case .proton:
-            return "Proton components are introduced into the modeled nuclear structure."
+        case .molecularSource:
+            return "The collected material is represented as a molecular source for the subsequent excitation and assembly stages."
 
-        case .neutron:
-            return "Neutron components are introduced to provide the modeled nuclear structure."
+        case .hydrogenOxygenExcitation:
+            return "Hydrogen and oxygen components are subjected to the modeled excitation process."
 
-        case .nucleus:
-            return "Protons and neutrons are assembled into the central nuclear structure."
+        case .antisymmetricExcitation:
+            return "The excitation state is driven into the modeled antisymmetric configuration."
 
-        case .energyShell:
-            return "A concentrated QRTL energy shell is established around the nucleus."
+        case .energyInjection:
+            return "External energy is injected into the modeled system to increase the available excitation and coupling."
 
-        case .current:
-            return "Incoming current supplies modeled energy to the QRTL system."
+        case .qrtlLattice:
+            return "A QRTL lattice is established as the modeled resonating spatial structure."
 
-        case .atom:
-            return "The nucleus is combined with an electron structure to create the modeled atom."
+        case .resonanceLock:
+            return "The modeled system approaches a coherent resonance condition in which the interacting components are more strongly coupled."
 
-        case .alignment:
-            return "Molecular components are guided toward an ordered configuration."
+        case .atomicCapture:
+            return "Atomic components are captured and positioned within the modeled QRTL interaction region."
 
-        case .bond:
-            return "The modeled interaction helps hold the molecular components together."
+        case .carbonPositioning:
+            return "Carbon atoms are progressively positioned to establish the six-carbon molecular framework."
 
-        case .carbonSkeleton:
-            return "Carbon components begin forming the backbone of the molecular structure."
+        case .hydrogenPositioning:
+            return "Hydrogen atoms are progressively positioned around the developing molecular framework."
 
-        case .glucose:
-            return "The modeled carbon, oxygen, and hydrogen components are assembled into a glucose-like structure."
+        case .oxygenPositioning:
+            return "Oxygen atoms are progressively positioned at their modeled molecular sites."
 
-        case .glucoseStabilization:
-            return "The molecular structure is moved toward a more stable modeled energy configuration."
+        case .bondAlignment:
+            return "The molecular components are moved toward their intended bond geometry."
 
-        case .glucosePair:
-            return "A second glucose unit is positioned near the first unit."
+        case .ringClosure:
+            return "The molecular chain is progressively closed into the modeled ring configuration."
 
-        case .strandBond:
-            return "The two molecular units are brought into a connected configuration."
+        case .glucoseAssembly:
+            return "The carbon, hydrogen, and oxygen components are assembled into the modeled C₆H₁₂O₆ glucose-like structure."
 
-        case .strandGrowth:
-            return "Additional molecular units are added to extend the strand."
+        case .molecularStabilization:
+            return "The assembled molecular structure is moved toward its modeled stable configuration."
 
-        case .finalLock:
-            return "The simulation reaches its final modeled QRTL energy configuration."
+        case .finalSugar:
+            return "The simulation reaches the final modeled sugar configuration."
         }
     }
 
-    // --------------------------------------------------------
-    // MARK: - Simple Analogy
-    // --------------------------------------------------------
+    // ========================================================
+    // MARK: Analogy
+    // ========================================================
 
     var analogy: String {
 
         switch self {
 
-        case .initialization:
-            return "Like turning on the power grid before starting a construction project."
+        case .spaceEnvironment:
+            return "Like preparing the construction site before bringing in the materials."
 
-        case .lattice:
-            return "Like putting the scaffolding in place before building the structure."
+        case .sourceCollection:
+            return "Like gathering all of the raw materials needed for a construction project."
 
-        case .proton:
-            return "Like placing the first major building blocks on the foundation."
+        case .molecularSource:
+            return "Like sorting those materials into the specific parts needed to build the structure."
 
-        case .neutron:
-            return "Like adding stabilizing blocks around the first pieces."
+        case .hydrogenOxygenExcitation:
+            return "Like energizing the parts so they are ready to move and interact."
 
-        case .nucleus:
-            return "Like assembling the central engine of a machine."
+        case .antisymmetricExcitation:
+            return "Like putting two coordinated systems into a special rhythm that allows them to interact."
 
-        case .energyShell:
-            return "Like creating an invisible energy bubble around that engine."
+        case .energyInjection:
+            return "Like supplying additional power to the machinery doing the construction."
 
-        case .current:
-            return "Like opening a fuel line and feeding energy into the chamber."
+        case .qrtlLattice:
+            return "Like putting a precision framework or scaffold around the construction area."
 
-        case .atom:
-            return "Like adding the moving parts around the central engine."
+        case .resonanceLock:
+            return "Like tuning every instrument in an orchestra to the same coordinated rhythm."
 
-        case .alignment:
-            return "Like magnets turning until their directions line up."
+        case .atomicCapture:
+            return "Like catching each building component and placing it onto its assigned position."
 
-        case .bond:
-            return "Like adding connectors that keep the pieces together."
+        case .carbonPositioning:
+            return "Like building the main frame of a house."
 
-        case .carbonSkeleton:
-            return "Like building the frame of a house before adding the walls."
+        case .hydrogenPositioning:
+            return "Like attaching the smaller supporting pieces around the frame."
 
-        case .glucose:
-            return "Like assembling all of the rooms and components into one structure."
+        case .oxygenPositioning:
+            return "Like installing specialized components at specific locations in the structure."
 
-        case .glucoseStabilization:
-            return "Like letting a newly assembled machine settle into its smoothest operating state."
+        case .bondAlignment:
+            return "Like rotating every connector until all of the pieces line up."
 
-        case .glucosePair:
-            return "Like placing two completed modules next to each other."
+        case .ringClosure:
+            return "Like connecting the final section of a circular track."
 
-        case .strandBond:
-            return "Like snapping two modules together with a connector."
+        case .glucoseAssembly:
+            return "Like completing the entire building from its individual components."
 
-        case .strandGrowth:
-            return "Like extending a train by attaching more cars."
+        case .molecularStabilization:
+            return "Like tightening every connection and allowing the completed structure to settle."
 
-        case .finalLock:
-            return "Like locking the completed structure into its final position."
+        case .finalSugar:
+            return "Like locking the finished construction into its final configuration."
         }
     }
 }
-
